@@ -23,7 +23,8 @@ export class FirebaseSignalingManager extends FirebaseManager {
    * Send a signaling message
    */
   public async sendSignal(roomId: string, message: SignalingMessage): Promise<void> {
-    if (!this.db) throw new Error('Not connected to Firebase');
+    const db = this.getDb();
+    if (!db) throw new Error('Not connected to Firebase');
 
     try {
       this.logger.info(`Sending ${message.type} signal in room ${roomId}`);
@@ -39,7 +40,7 @@ export class FirebaseSignalingManager extends FirebaseManager {
       };
 
       // Add message to room's signals collection
-      const signalsCollectionRef = collection(this.db, 'rooms', roomId, 'signals');
+      const signalsCollectionRef = collection(db, 'rooms', roomId, 'signals');
       await addDoc(signalsCollectionRef, messageWithTimestamp);
       
       this.logger.info(`Signal sent successfully`);
@@ -53,14 +54,15 @@ export class FirebaseSignalingManager extends FirebaseManager {
    * Get signaling messages
    */
   public async getSignals(roomId: string, since: number = 0): Promise<SignalingMessage[]> {
-    if (!this.db) throw new Error('Not connected to Firebase');
+    const db = this.getDb();
+    if (!db) throw new Error('Not connected to Firebase');
 
     try {
       this.logger.info(`Getting signals for room ${roomId} since ${new Date(since).toISOString()}`);
       
       // Query messages since the given timestamp
       const sinceTimestamp = Timestamp.fromMillis(since);
-      const signalsCollectionRef = collection(this.db, 'rooms', roomId, 'signals');
+      const signalsCollectionRef = collection(db, 'rooms', roomId, 'signals');
       const signalsQuery = query(
         signalsCollectionRef,
         where('firestoreTimestamp', '>', sinceTimestamp),

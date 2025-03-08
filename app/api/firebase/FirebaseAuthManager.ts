@@ -26,12 +26,12 @@ export class FirebaseAuthManager extends FirebaseManager {
   public async connect(): Promise<void> {
     await super.connect();
 
-    if (!this.app) {
+    if (!this.getApp()) {
       throw new Error('Firebase app not initialized');
     }
 
     // Initialize authentication
-    const auth = getAuth(this.app);
+    const auth = getAuth(this.getApp()!);
     this.user = auth.currentUser;
 
     this.logger.info(
@@ -70,10 +70,10 @@ export class FirebaseAuthManager extends FirebaseManager {
    * Sign in with Google
    */
   public async signInWithGoogle(): Promise<UserInfo> {
-    if (!this.app) throw new Error('Not connected to Firebase');
+    if (!this.getApp()) throw new Error('Not connected to Firebase');
 
     try {
-      const auth = getAuth(this.app);
+      const auth = getAuth(this.getApp()!);
       const provider = new GoogleAuthProvider();
       const result = await signInWithPopup(auth, provider);
       this.user = result.user;
@@ -89,10 +89,10 @@ export class FirebaseAuthManager extends FirebaseManager {
    * Sign out
    */
   public async signOut(): Promise<void> {
-    if (!this.app) throw new Error('Not connected to Firebase');
+    if (!this.getApp()) throw new Error('Not connected to Firebase');
 
     try {
-      const auth = getAuth(this.app);
+      const auth = getAuth(this.getApp()!);
       await signOut(auth);
       this.user = null;
     } catch (error) {
@@ -110,6 +110,13 @@ export class FirebaseAuthManager extends FirebaseManager {
   }
 
   /**
+   * Get the raw Firebase User object (for testing/internal use)
+   */
+  public getFirebaseUser(): User | null {
+    return this.user;
+  }
+
+  /**
    * Check if user is signed in
    */
   public isSignedIn(): boolean {
@@ -120,7 +127,7 @@ export class FirebaseAuthManager extends FirebaseManager {
    * Add auth state change listener
    */
   public onAuthStateChanged(listener: (user: UserInfo | null) => void): () => void {
-    if (!this.app) throw new Error('Not connected to Firebase');
+    if (!this.getApp()) throw new Error('Not connected to Firebase');
 
     const wrappedListener = (user: User | null) => {
       if (user) {
@@ -132,7 +139,7 @@ export class FirebaseAuthManager extends FirebaseManager {
 
     this.authStateChangeListeners.push(wrappedListener);
 
-    const auth = getAuth(this.app);
+    const auth = getAuth(this.getApp()!);
     return onAuthStateChanged(auth, (user) => {
       this.user = user;
       wrappedListener(user);
