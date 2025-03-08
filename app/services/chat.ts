@@ -48,16 +48,32 @@ export class ChatManager {
       console.log('[Chat] Data channel ready state after initialization:', ready);
       return ready;
     } else {
-      // Set up callback to receive the data channel
+      // Create a promise that resolves when we receive the data channel
       console.log('[Chat] Setting up callback to receive data channel');
-      this.webrtcManager.setOnDataChannel((channel) => {
-        console.log('[Chat] Received data channel in callback');
-        this.dataChannel = channel;
-        this.setupDataChannel();
-      });
       
-      // Return true for non-initiators as they'll receive the channel later
-      return true;
+      // Create a promise that will resolve when the data channel is ready
+      return new Promise((resolve) => {
+        // Set up callback to receive the data channel
+        this.webrtcManager.setOnDataChannel((channel) => {
+          console.log('[Chat] Received data channel in callback');
+          this.dataChannel = channel;
+          this.setupDataChannel();
+          
+          // Wait for the channel to be ready after receiving it
+          this.waitForChannelReady(15000).then((ready) => {
+            console.log('[Chat] Non-initiator data channel ready state:', ready);
+            resolve(ready);
+          });
+        });
+        
+        // Set a timeout in case we never receive a data channel
+        setTimeout(() => {
+          if (!this.dataChannel) {
+            console.error('[Chat] Timed out waiting to receive data channel');
+            resolve(false);
+          }
+        }, 20000);
+      });
     }
   }
 
@@ -114,11 +130,19 @@ export class ChatManager {
    * Send a chat message
    */
   public sendMessage(content: string): ChatMessage | null {
-    if (!this.dataChannel || this.dataChannel.readyState !== 'open') {
-      console.error('Data channel not open');
+    // Detailed check for data channel state
+    if (!this.dataChannel) {
+      console.error('[Chat] Data channel not initialized yet');
+      return null;
+    }
+    
+    if (this.dataChannel.readyState !== 'open') {
+      console.error(`[Chat] Data channel not open, current state: ${this.dataChannel.readyState}`);
       return null;
     }
 
+    console.log('[Chat] Sending message on data channel:', content.substring(0, 20) + (content.length > 20 ? '...' : ''));
+    
     const messageId = this.generateId();
     const timestamp = Date.now();
 
@@ -140,6 +164,7 @@ export class ChatManager {
         })
       );
 
+      console.log('[Chat] Message sent successfully');
       this.messages.push(message);
 
       if (this.onMessageCallback) {
@@ -148,7 +173,7 @@ export class ChatManager {
 
       return message;
     } catch (error) {
-      console.error('Error sending chat message:', error);
+      console.error('[Chat] Error sending chat message:', error);
       return null;
     }
   }
@@ -180,8 +205,18 @@ export class ChatManager {
    * Check if data channel is open
    */
   public isReady(): boolean {
-    const isChannelOpen = this.dataChannel !== null && this.dataChannel.readyState === 'open';
-    console.log('[Chat] Data channel ready state:', this.dataChannel?.readyState || 'null');
+    if (!this.dataChannel) {
+      console.log('[Chat] Data channel is null, not ready');
+      return false;
+    }
+    
+    const isChannelOpen = this.dataChannel.readyState === 'open';
+    console.log('[Chat] Data channel ready state:', this.dataChannel.readyState);
+    
+    if (!isChannelOpen) {
+      console.log('[Chat] Data channel is not in open state, current state:', this.dataChannel.readyState);
+    }
+    
     return isChannelOpen;
   }
   

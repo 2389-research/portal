@@ -47,6 +47,7 @@ export default function RoomScreen() {
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [chatReady, setChatReady] = useState(false);
   const [isChatVisible, setIsChatVisible] = useState(false);
+  const [lastChatCheck, setLastChatCheck] = useState(0); // To track periodic checks
 
   // Service references
   const mediaManager = useRef<MediaManager | null>(null);
@@ -427,9 +428,41 @@ export default function RoomScreen() {
 
   // Handle send chat message
   const handleSendMessage = (content: string) => {
-    if (!chatManager.current) return;
+    if (!chatManager.current) {
+      console.error('[Room] Chat manager not initialized in handleSendMessage');
+      return;
+    }
+    
+    // Double check that data channel is ready
+    if (!chatManager.current.isReady()) {
+      console.error('[Room] Chat channel not ready when attempting to send message');
+      setChatReady(false); // Update UI state to reflect reality
+      
+      // Try to re-establish chat data channel
+      const tryReconnect = async () => {
+        console.log('[Room] Attempting to re-establish chat data channel');
+        if (chatManager.current) {
+          const ready = await chatManager.current.waitForChannelReady(5000);
+          console.log('[Room] Re-established chat data channel result:', ready);
+          setChatReady(ready);
+          
+          // If reconnected, try sending the message again
+          if (ready) {
+            chatManager.current.sendMessage(content);
+          }
+        }
+      };
+      
+      tryReconnect();
+      return;
+    }
 
-    chatManager.current.sendMessage(content);
+    // If all checks pass, send the message
+    const result = chatManager.current.sendMessage(content);
+    if (!result) {
+      console.error('[Room] Failed to send message, updating chat ready state');
+      setChatReady(false);
+    }
   };
 
   // Handle toggle audio
@@ -606,6 +639,35 @@ export default function RoomScreen() {
   // State for media error handling
   const [mediaError, setMediaError] = useState<string | null>(null);
   const [skipMediaAccess, setSkipMediaAccess] = useState(false);
+
+  // Add a useEffect for periodically checking chat data channel status
+  useEffect(() => {
+    // Only run this if we're connected and have a chat manager
+    if (!connected || !chatManager.current) {
+      return;
+    }
+    
+    // Set up an interval to check chat status every 5 seconds
+    const intervalId = setInterval(() => {
+      if (chatManager.current) {
+        // Check if the channel is ready
+        const isChannelReady = chatManager.current.isReady();
+        
+        // If our UI state doesn't match reality, update it
+        if (chatReady !== isChannelReady) {
+          console.log('[Room] Chat ready state mismatch detected, updating UI state', 
+                      {uiReady: chatReady, actualReady: isChannelReady});
+          setChatReady(isChannelReady);
+        }
+        
+        setLastChatCheck(Date.now());
+      }
+    }, 5000);
+    
+    return () => {
+      clearInterval(intervalId);
+    };
+  }, [connected, chatReady]);
 
   // Use effect to handle media errors
   useEffect(() => {
