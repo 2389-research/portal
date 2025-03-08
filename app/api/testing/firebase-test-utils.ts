@@ -26,7 +26,7 @@ export class MockFirebaseApiClient implements ApiInterface {
   public async disconnect(): Promise<void> {
     this.connected = false;
   }
-
+  
   public isConnected(): boolean {
     return this.connected;
   }
