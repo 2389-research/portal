@@ -4,6 +4,7 @@
  */
 
 import { ApiInterface } from '../api/ApiInterface';
+import { createLogger } from './logger';
 
 export interface SignalingMessage {
   type: string;
@@ -11,6 +12,7 @@ export interface SignalingMessage {
   receiver?: string;
   roomId: string;
   data: any;
+  timestamp?: number;  // Add timestamp property
 }
 
 export class SignalingService {
@@ -21,6 +23,7 @@ export class SignalingService {
   private pollingInterval: NodeJS.Timeout | null = null;
   private isPolling = false;
   private lastMessageTime = 0;
+  private logger = createLogger('Signaling');
 
   constructor(apiClient: ApiInterface) {
     this.apiClient = apiClient;
@@ -31,22 +34,22 @@ export class SignalingService {
    */
   public async joinRoom(roomId: string): Promise<string> {
     try {
-      console.log('[Signaling] Joining room via API:', roomId);
+      this.logger.info('Joining room via API:', roomId);
 
       // Join the room via API
       const result = await this.apiClient.joinRoom(roomId);
       this.roomId = roomId;
       this.userId = result.userId;
 
-      console.log('[Signaling] Room joined successfully, userId:', this.userId);
+      this.logger.info('Room joined successfully, userId:', this.userId);
 
       // Start polling for messages
-      console.log('[Signaling] Starting message polling');
+      this.logger.info('Starting message polling');
       this.startPolling();
 
       return this.userId;
     } catch (error) {
-      console.error('[Signaling] Error joining room:', error);
+      this.logger.error('Error joining room:', error);
 
       // Provide more specific error information
       if (error.message) {
@@ -72,7 +75,7 @@ export class SignalingService {
 
       return result;
     } catch (error) {
-      console.error('Error creating room:', error);
+      this.logger.error('Error creating room:', error);
       throw error;
     }
   }
@@ -80,16 +83,22 @@ export class SignalingService {
   /**
    * Send a signaling message
    */
-  public async sendMessage(type: string, data: any, receiver?: string): Promise<void> {
-    if (!this.roomId || !this.userId) {
+  public async sendMessage(type: string, data: any, receiver?: string, forceRoomId?: string, forceSenderId?: string): Promise<void> {
+    // Allow force sending with specific room and user IDs (used when leaving a room)
+    const roomId = forceRoomId || this.roomId;
+    const userId = forceSenderId || this.userId;
+    
+    if (!roomId || !userId) {
+      this.logger.error('Cannot send message, not connected to a room');
       throw new Error('Not connected to a room');
     }
 
     const message: SignalingMessage = {
       type,
-      sender: this.userId,
-      roomId: this.roomId,
+      sender: userId,
+      roomId: roomId,
       data,
+      timestamp: Date.now() // Add timestamp to outgoing messages
     };
 
     if (receiver) {
@@ -97,9 +106,10 @@ export class SignalingService {
     }
 
     try {
-      await this.apiClient.sendSignal(this.roomId, message);
+      this.logger.info(`Sending message type: ${type} to room: ${roomId}`);
+      await this.apiClient.sendSignal(roomId, message);
     } catch (error) {
-      console.error('Error sending message:', error);
+      this.logger.error('Error sending message:', error);
       throw error;
     }
   }
@@ -137,46 +147,78 @@ export class SignalingService {
    * Stop polling for messages
    */
   private stopPolling(): void {
-    if (!this.isPolling) return;
-
+    this.logger.info('Stopping polling. Current polling state:', this.isPolling);
+    
+    // Always try to clear the interval, even if isPolling is false
     if (this.pollingInterval) {
+      this.logger.info('Clearing polling interval');
       clearInterval(this.pollingInterval);
       this.pollingInterval = null;
     }
-
+    
+    // Reset the polling state
     this.isPolling = false;
+    
+    this.logger.info('Polling stopped');
   }
 
   /**
    * Poll for new messages
    */
   private async pollMessages(): Promise<void> {
-    if (!this.roomId || !this.userId) return;
+    if (!this.roomId || !this.userId) {
+      this.logger.info('Cannot poll messages: not connected to a room');
+      return;
+    }
 
     try {
+      this.logger.debug('Polling for messages since:', new Date(this.lastMessageTime).toISOString());
       const messages = await this.apiClient.getSignals(this.roomId, this.lastMessageTime);
 
-      if (messages.length > 0) {
-        // Update last message time
-        this.lastMessageTime = Math.max(...messages.map((m) => m.timestamp || 0));
+      // Log the activity even if no messages
+      if (messages.length === 0) {
+        this.logger.debug('No new messages');
+        return;
+      }
+      
+      this.logger.info(`Received ${messages.length} new messages`);
+      
+      // Get the latest timestamp from all messages
+      const timestamps = messages.map(m => m.timestamp || 0).filter(t => t > 0);
+      if (timestamps.length > 0) {
+        this.lastMessageTime = Math.max(...timestamps);
+        this.logger.debug('Updated lastMessageTime to:', new Date(this.lastMessageTime).toISOString());
+      }
 
-        // Process messages
-        messages.forEach((message) => {
-          // Skip messages sent by this user
-          if (message.sender === this.userId) return;
+      // Process messages
+      for (const message of messages) {
+        // Skip messages sent by this user
+        if (message.sender === this.userId) {
+          this.logger.debug('Skipping own message of type:', message.type);
+          continue;
+        }
 
-          // Skip messages not intended for this user
-          if (message.receiver && message.receiver !== this.userId) return;
+        // Skip messages not intended for this user
+        if (message.receiver && message.receiver !== this.userId) {
+          this.logger.debug('Skipping message intended for:', message.receiver);
+          continue;
+        }
 
-          // Handle the message
-          const handler = this.messageHandlers.get(message.type);
-          if (handler) {
+        // Handle the message
+        const handler = this.messageHandlers.get(message.type);
+        if (handler) {
+          this.logger.info('Processing message of type:', message.type, 'from:', message.sender);
+          try {
             handler(message);
+          } catch (handlerError) {
+            this.logger.error('Error in message handler for type:', message.type, handlerError);
           }
-        });
+        } else {
+          this.logger.debug('No handler for message type:', message.type);
+        }
       }
     } catch (error) {
-      console.error('Error polling messages:', error);
+      this.logger.error('Error polling messages:', error);
     }
   }
 
@@ -184,23 +226,49 @@ export class SignalingService {
    * Leave the current room
    */
   public async leaveRoom(): Promise<void> {
-    if (!this.roomId || !this.userId) return;
+    this.logger.info('Leaving room, roomId:', this.roomId, 'userId:', this.userId);
+    
+    // Always stop polling, even if not in a room
+    this.stopPolling();
+    
+    if (!this.roomId || !this.userId) {
+      this.logger.info('Not connected to a room, nothing to leave');
+      return;
+    }
 
     try {
-      // Stop polling for messages
-      this.stopPolling();
-
+      // Save room and user ID for API calls
+      const roomIdToLeave = this.roomId;
+      const userIdToLeave = this.userId;
+      
+      // Clear state immediately to prevent any more polling
+      this.roomId = null;
+      this.userId = null;
+      
       // Notify other users that we're leaving
-      await this.sendMessage('user-left', { userId: this.userId });
+      this.logger.info('Sending user-left message');
+      try {
+        await this.sendMessage('user-left', { userId: userIdToLeave }, undefined, roomIdToLeave, userIdToLeave);
+      } catch (sendError) {
+        this.logger.error('Error sending leave message:', sendError);
+        // Continue with leaving even if the message fails
+      }
 
       // Leave the room via API
-      await this.apiClient.leaveRoom(this.roomId, this.userId);
-
+      this.logger.info('Calling API leaveRoom');
+      await this.apiClient.leaveRoom(roomIdToLeave, userIdToLeave);
+      
+      // Clear all handlers
+      this.messageHandlers.clear();
+      
+      this.logger.info('Successfully left room');
+    } catch (error) {
+      this.logger.error('Error leaving room:', error);
+      
+      // Make sure state is reset even on error
       this.roomId = null;
       this.userId = null;
       this.messageHandlers.clear();
-    } catch (error) {
-      console.error('Error leaving room:', error);
     }
   }
 

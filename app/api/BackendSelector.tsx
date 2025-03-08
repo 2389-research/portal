@@ -4,21 +4,26 @@
 
 import React, { useEffect, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
-import { Button, Card, Layout, Radio, RadioGroup, Text } from '@ui-kitten/components';
-import { ApiProvider, ApiType } from './ApiProvider';
+import { Button, Card, Radio, RadioGroup, Text } from '@ui-kitten/components';
+import { ApiProvider, ApiType } from '.';
+import { createLogger } from '../services/logger';
 
 interface BackendSelectorProps {
   onSelect: (apiType: ApiType) => void;
   initialType?: ApiType;
+  apiProvider: ApiProvider;
 }
 
 export const BackendSelector: React.FC<BackendSelectorProps> = ({
   onSelect,
   initialType = 'firebase',
+  apiProvider,
 }) => {
+  const logger = createLogger('BackendSelector');
+
   // Set initial selected index based on initialType
   const getInitialIndex = () => {
-    const apiTypes: ApiType[] = ['mock', 'firebase'];
+    const apiTypes: ApiType[] = ['firebase'];
     return apiTypes.indexOf(initialType);
   };
 
@@ -26,7 +31,7 @@ export const BackendSelector: React.FC<BackendSelectorProps> = ({
   const [apiType, setApiType] = useState<ApiType>(initialType);
 
   // API type options
-  const apiTypes: ApiType[] = ['mock', 'firebase'];
+  const apiTypes: ApiType[] = ['firebase'];
 
   // Map numerical index to API type
   useEffect(() => {
@@ -37,11 +42,11 @@ export const BackendSelector: React.FC<BackendSelectorProps> = ({
   // Handle apply button click
   const handleApply = async () => {
     try {
-      const provider = ApiProvider.getInstance();
-      await provider.initialize(apiType);
+      logger.info(`Initializing API with type: ${apiType}`);
+      await apiProvider.initialize(apiType);
       onSelect(apiType);
     } catch (error) {
-      console.error('Error initializing API:', error);
+      logger.error('Error initializing API:', error);
     }
   };
 
@@ -52,7 +57,6 @@ export const BackendSelector: React.FC<BackendSelectorProps> = ({
       </Text>
 
       <RadioGroup selectedIndex={selectedIndex} onChange={(index) => setSelectedIndex(index)}>
-        <Radio>Mock (In-memory)</Radio>
         <Radio>Firebase</Radio>
       </RadioGroup>
 

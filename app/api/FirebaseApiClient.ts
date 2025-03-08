@@ -27,6 +27,7 @@ import {
 } from 'firebase/firestore';
 import { ApiInterface, RoomResponse, JoinRoomResponse, UserInfo } from './ApiInterface';
 import { SignalingMessage } from '../services/signaling';
+import { createLogger } from '../services/logger';
 
 export class FirebaseApiClient implements ApiInterface {
   public app: FirebaseApp | null = null; // Made public for testing
@@ -34,6 +35,7 @@ export class FirebaseApiClient implements ApiInterface {
   private config: FirebaseOptions;
   public user: User | null = null; // Made public for testing
   private authStateChangeListeners: ((user: User | null) => void)[] = [];
+  private logger = createLogger('Firebase');
 
   constructor(config: FirebaseOptions) {
     this.config = config;
@@ -44,14 +46,14 @@ export class FirebaseApiClient implements ApiInterface {
    */
   public async connect(): Promise<void> {
     try {
-      console.log('[Firebase] Connecting to Firebase');
+      this.logger.info('Connecting to Firebase');
 
       // Initialize Firebase app if not already initialized
       try {
         this.app = getApp();
-        console.log('[Firebase] Using existing Firebase app');
+        this.logger.info('Using existing Firebase app');
       } catch {
-        console.log('[Firebase] Initializing new Firebase app');
+        this.logger.info('Initializing new Firebase app');
         this.app = initializeApp(this.config);
       }
 
@@ -62,8 +64,8 @@ export class FirebaseApiClient implements ApiInterface {
       const auth = getAuth(this.app);
       this.user = auth.currentUser;
 
-      console.log(
-        '[Firebase] Current auth state on connect:',
+      this.logger.info(
+        'Current auth state on connect:',
         this.user ? `Authenticated as ${this.user.displayName}` : 'Not authenticated'
       );
 
@@ -71,8 +73,8 @@ export class FirebaseApiClient implements ApiInterface {
       return new Promise<void>((resolve) => {
         // Set up auth state change listener
         const unsubscribe = onAuthStateChanged(auth, (user) => {
-          console.log(
-            '[Firebase] Auth state changed:',
+          this.logger.info(
+            'Auth state changed:',
             user ? `Authenticated as ${user.displayName}` : 'Not authenticated'
           );
 
@@ -88,12 +90,12 @@ export class FirebaseApiClient implements ApiInterface {
 
         // If we already have the auth state, resolve immediately
         if (auth.currentUser !== null || auth.currentUser === null) {
-          console.log('[Firebase] Auth state already determined');
+          this.logger.info('Auth state already determined');
           resolve();
         }
       });
     } catch (error) {
-      console.error('[Firebase] Error connecting to Firebase:', error);
+      this.logger.error('Error connecting to Firebase:', error);
       throw error;
     }
   }
@@ -113,16 +115,16 @@ export class FirebaseApiClient implements ApiInterface {
     if (!this.db) throw new Error('Not connected to Firebase');
 
     try {
-      console.log('[Firebase] Creating new room');
-      console.log('[Firebase] Current user:', this.user ? this.user.displayName : 'Not signed in');
+      this.logger.info('Creating new room');
+      this.logger.info('Current user:', this.user ? this.user.displayName : 'Not signed in');
 
       // Generate room ID
       const roomId = this.generateRoomId();
-      console.log('[Firebase] Generated room ID:', roomId);
+      this.logger.info('Generated room ID:', roomId);
 
       // Generate user ID
       const userId = this.generateUserId();
-      console.log('[Firebase] Generated user ID:', userId);
+      this.logger.info('Generated user ID:', userId);
 
       // Create timestamp
       const created = Date.now();
@@ -130,7 +132,7 @@ export class FirebaseApiClient implements ApiInterface {
 
       // Create room in Firestore
       const roomRef = doc(this.db, 'rooms', roomId);
-      console.log('[Firebase] Creating room document in Firestore');
+      this.logger.info('Creating room document in Firestore');
       await setDoc(roomRef, {
         created: createdTimestamp,
         createdBy: userId,
@@ -138,14 +140,14 @@ export class FirebaseApiClient implements ApiInterface {
       });
 
       // Add user to room
-      console.log('[Firebase] Adding user to room');
+      this.logger.info('Adding user to room');
       const userRef = doc(this.db, 'rooms', roomId, 'users', userId);
       await setDoc(userRef, {
         joined: createdTimestamp,
         active: true,
       });
 
-      console.log('[Firebase] Room created successfully:', roomId);
+      this.logger.info('Room created successfully:', roomId);
 
       return {
         roomId,
@@ -153,15 +155,15 @@ export class FirebaseApiClient implements ApiInterface {
         created,
       };
     } catch (error) {
-      console.error('[Firebase] Error creating room:', error);
+      this.logger.error('Error creating room:', error);
 
       // Extract and log the detailed error
       if (error.code) {
-        console.error('[Firebase] Error code:', error.code);
+        this.logger.error('Error code:', error.code);
       }
 
       if (error.message) {
-        console.error('[Firebase] Error message:', error.message);
+        this.logger.error('Error message:', error.message);
       }
 
       throw error;
@@ -175,18 +177,18 @@ export class FirebaseApiClient implements ApiInterface {
     if (!this.db) throw new Error('Not connected to Firebase');
 
     try {
-      console.log('[Firebase] Joining room:', roomId);
-      console.log('[Firebase] Current user:', this.user ? this.user.displayName : 'Not signed in');
+      this.logger.info('Joining room:', roomId);
+      this.logger.info('Current user:', this.user ? this.user.displayName : 'Not signed in');
 
       // Check if room exists
       const roomRef = doc(this.db, 'rooms', roomId);
-      console.log('[Firebase] Checking if room exists');
+      this.logger.info('Checking if room exists');
       const roomSnapshot = await getDoc(roomRef);
 
-      console.log('[Firebase] Room exists:', roomSnapshot.exists());
+      this.logger.info('Room exists:', roomSnapshot.exists());
 
       if (!roomSnapshot.exists()) {
-        console.log('[Firebase] Room does not exist, creating it');
+        this.logger.info('Room does not exist, creating it');
 
         // If room doesn't exist, create it (this is different from the original behavior)
         const userId = this.generateUserId();
@@ -207,7 +209,7 @@ export class FirebaseApiClient implements ApiInterface {
           active: true,
         });
 
-        console.log('[Firebase] Room created with ID:', roomId, 'and user ID:', userId);
+        this.logger.info('Room created with ID:', roomId, 'and user ID:', userId);
 
         return {
           userId,
@@ -217,36 +219,36 @@ export class FirebaseApiClient implements ApiInterface {
 
       // If room exists, generate user ID
       const userId = this.generateUserId();
-      console.log('[Firebase] Generated user ID:', userId);
+      this.logger.info('Generated user ID:', userId);
 
       // Create timestamp
       const joined = Date.now();
       const joinedTimestamp = Timestamp.fromMillis(joined);
 
       // Add user to room
-      console.log('[Firebase] Adding user to room');
+      this.logger.info('Adding user to room');
       const userRef = doc(this.db, 'rooms', roomId, 'users', userId);
       await setDoc(userRef, {
         joined: joinedTimestamp,
         active: true,
       });
 
-      console.log('[Firebase] Successfully joined room');
+      this.logger.info('Successfully joined room');
 
       return {
         userId,
         joined,
       };
     } catch (error) {
-      console.error('[Firebase] Error joining room:', error);
+      this.logger.error('Error joining room:', error);
 
       // Extract and log the detailed error
       if (error.code) {
-        console.error('[Firebase] Error code:', error.code);
+        this.logger.error('Error code:', error.code);
       }
 
       if (error.message) {
-        console.error('[Firebase] Error message:', error.message);
+        this.logger.error('Error message:', error.message);
       }
 
       throw error;
@@ -271,7 +273,7 @@ export class FirebaseApiClient implements ApiInterface {
         { merge: true }
       );
     } catch (error) {
-      console.error('Error leaving room:', error);
+      this.logger.error('Error leaving room:', error);
       throw error;
     }
   }
@@ -297,7 +299,7 @@ export class FirebaseApiClient implements ApiInterface {
       const signalsCollectionRef = collection(this.db, 'rooms', roomId, 'signals');
       await addDoc(signalsCollectionRef, messageWithTimestamp);
     } catch (error) {
-      console.error('Error sending signal:', error);
+      this.logger.error('Error sending signal:', error);
       throw error;
     }
   }
@@ -336,7 +338,7 @@ export class FirebaseApiClient implements ApiInterface {
 
       return signals;
     } catch (error) {
-      console.error('Error getting signals:', error);
+      this.logger.error('Error getting signals:', error);
       throw error;
     }
   }
@@ -367,7 +369,7 @@ export class FirebaseApiClient implements ApiInterface {
         photoURL: result.user.photoURL,
       };
     } catch (error) {
-      console.error('Error signing in with Google:', error);
+      this.logger.error('Error signing in with Google:', error);
       throw error;
     }
   }
@@ -383,7 +385,7 @@ export class FirebaseApiClient implements ApiInterface {
       await signOut(auth);
       this.user = null;
     } catch (error) {
-      console.error('Error signing out:', error);
+      this.logger.error('Error signing out:', error);
       throw error;
     }
   }

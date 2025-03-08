@@ -1,46 +1,45 @@
 /**
- * API Provider for selecting and managing API clients
- * Uses dependency injection instead of singleton pattern for better testability
+ * Legacy ApiProvider with Singleton Pattern
+ * This provides backward compatibility with existing code
  */
 
-import { ApiInterface } from './ApiInterface';
-import { FirebaseApiClient } from './FirebaseApiClient';
-import { config } from './config';
-import { createLogger } from '../services/logger';
+import { ApiInterface } from '../ApiInterface';
+import { FirebaseApiClient } from '../firebase/FirebaseApiClient';
+import { config } from '../config';
+import { createLogger } from '../../services/logger';
 
 // We only support Firebase
 export type ApiType = 'firebase';
 
-// Factory function to create API clients
-export function createApiClient(type: ApiType): ApiInterface {
-  switch (type) {
-    case 'firebase':
-      return new FirebaseApiClient(config.firebase);
-    default:
-      throw new Error(`Unsupported API type: ${type}`);
-  }
-}
-
+/**
+ * Singleton ApiProvider class for backward compatibility
+ */
 export class ApiProvider {
+  private static instance: ApiProvider;
   private apiClient: ApiInterface | null = null;
   private apiType: ApiType | null = null;
   private logger = createLogger('ApiProvider');
 
-  constructor(initialApiType?: ApiType) {
-    if (initialApiType) {
-      // Don't await here - let the caller handle initialization
-      this.initialize(initialApiType).catch(err => {
-        this.logger.error('Failed to initialize API client', err);
-      });
-    }
+  private constructor() {
+    // Private constructor for singleton
   }
 
   /**
-   * Initialize with specified API type
+   * Get the API provider instance
+   */
+  public static getInstance(): ApiProvider {
+    if (!ApiProvider.instance) {
+      ApiProvider.instance = new ApiProvider();
+    }
+    return ApiProvider.instance;
+  }
+
+  /**
+   * Initialize with Firebase (only supported option)
    */
   public async initialize(type: ApiType = 'firebase'): Promise<ApiInterface> {
-    this.logger.info(`Initializing API client of type: ${type}`);
-    
+    this.logger.info(`Initializing API of type: ${type}`);
+
     // If we already have a client of this type, return it
     if (this.apiClient && this.apiType === type) {
       this.logger.info('Reusing existing API client');
@@ -55,8 +54,8 @@ export class ApiProvider {
       this.apiType = null;
     }
 
-    // Create the API client using factory function
-    this.apiClient = createApiClient(type);
+    // Create the Firebase client
+    this.apiClient = new FirebaseApiClient(config.firebase);
 
     // Connect to the API
     this.logger.info('Connecting to API');

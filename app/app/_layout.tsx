@@ -4,8 +4,10 @@ import * as eva from '@eva-design/eva';
 import { EvaIconsPack } from '@ui-kitten/eva-icons';
 import { ApplicationProvider, IconRegistry, Spinner, Layout } from '@ui-kitten/components';
 import { theme } from '../theme';
-import { ApiProvider } from '../api/ApiProvider';
+import { ApiProvider } from '../api';
 import { View, Text } from 'react-native';
+import { createLogger } from '../services/logger';
+import { initializeLogging } from '../services/logger-config';
 
 export default function RootLayout() {
   const [initializing, setInitializing] = useState(true);
@@ -13,15 +15,19 @@ export default function RootLayout() {
   // Initialize Firebase and check auth state on app start
   useEffect(() => {
     const initializeApp = async () => {
+      // Initialize logging first
+      initializeLogging();
+      const logger = createLogger('App');
+      
       try {
         // Initialize Firebase
-        console.log('[App] Initializing Firebase on app start');
+        logger.info('Initializing Firebase on app start');
         const provider = ApiProvider.getInstance();
         await provider.initialize();
 
-        console.log('[App] Firebase initialized');
+        logger.info('Firebase initialized');
       } catch (error) {
-        console.error('[App] Error initializing Firebase:', error);
+        logger.error('Error initializing Firebase:', error);
       } finally {
         // Whether successful or not, we're done initializing
         setInitializing(false);

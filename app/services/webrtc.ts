@@ -2,6 +2,7 @@
  * WebRTC Manager for Expo
  * This is a React Native-friendly wrapper for the WebRTC API
  */
+import { createLogger } from './logger';
 
 interface PeerConfig {
   iceServers: RTCIceServer[];
@@ -17,6 +18,7 @@ export class WebRTCManager {
   private onNegotiationNeededCallback: (() => void) | null = null;
   private onTrackCallback: ((stream: MediaStream, peerId: string) => void) | null = null;
   private onDataChannelCallback: ((channel: RTCDataChannel) => void) | null = null;
+  private logger = createLogger('WebRTC');
 
   constructor(config?: Partial<PeerConfig>) {
     this.peerConfig = {
@@ -24,9 +26,21 @@ export class WebRTCManager {
         { urls: 'stun:stun.l.google.com:19302' },
         { urls: 'stun:stun1.l.google.com:19302' },
         { urls: 'stun:stun2.l.google.com:19302' },
+        { 
+          urls: 'turn:openrelay.metered.ca:80',
+          username: 'openrelayproject',
+          credential: 'openrelayproject'
+        },
+        { 
+          urls: 'turn:openrelay.metered.ca:443',
+          username: 'openrelayproject',
+          credential: 'openrelayproject'
+        },
       ],
       ...config,
     };
+    
+    this.logger.info('Initialized with ICE servers:', JSON.stringify(this.peerConfig.iceServers));
   }
 
   /**
@@ -68,7 +82,24 @@ export class WebRTCManager {
     };
 
     this.peerConnection.ondatachannel = (event) => {
+      this.logger.info('Data channel received from remote peer:', event.channel.label);
       this.dataChannel = event.channel;
+      
+      // Setup data channel event handlers
+      this.dataChannel.onopen = () => {
+        this.logger.info(`Received data channel '${this.dataChannel?.label}' opened`);
+      };
+      
+      this.dataChannel.onclose = () => {
+        this.logger.info(`Received data channel '${this.dataChannel?.label}' closed`);
+      };
+      
+      this.dataChannel.onerror = (err) => {
+        this.logger.error(`Received data channel '${this.dataChannel?.label}' error:`, err);
+      };
+      
+      this.logger.info('Received data channel state:', this.dataChannel.readyState);
+      
       if (this.onDataChannelCallback) {
         this.onDataChannelCallback(this.dataChannel);
       }
@@ -80,12 +111,38 @@ export class WebRTCManager {
    */
   public createDataChannel(label: string): RTCDataChannel | null {
     if (!this.peerConnection) {
-      console.error('Peer connection not initialized');
+      this.logger.error('Peer connection not initialized when creating data channel');
       return null;
     }
 
-    this.dataChannel = this.peerConnection.createDataChannel(label);
-    return this.dataChannel;
+    try {
+      this.logger.info('Creating data channel with label:', label);
+      
+      // Create the data channel with specific options
+      this.dataChannel = this.peerConnection.createDataChannel(label, {
+        ordered: true,      // Guarantee message order
+        maxRetransmits: 30  // Allow up to 30 retransmission attempts
+      });
+      
+      // Setup data channel event handlers
+      this.dataChannel.onopen = () => {
+        this.logger.info(`Data channel '${label}' opened`);
+      };
+      
+      this.dataChannel.onclose = () => {
+        this.logger.info(`Data channel '${label}' closed`);
+      };
+      
+      this.dataChannel.onerror = (event) => {
+        this.logger.error(`Data channel '${label}' error:`, event);
+      };
+      
+      this.logger.info('Data channel created successfully, state:', this.dataChannel.readyState);
+      return this.dataChannel;
+    } catch (error) {
+      this.logger.error('Error creating data channel:', error);
+      return null;
+    }
   }
 
   /**
