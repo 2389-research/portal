@@ -6,9 +6,8 @@
 import React from 'react';
 import { StyleSheet, View, Platform } from 'react-native';
 import { Text } from '@ui-kitten/components';
-import { WebVideoContainer } from './platform/WebVideoContainer';
-import { NativeVideoContainer } from './platform/NativeVideoContainer';
 
+// Define the props interface
 export interface VideoContainerProps {
   stream: MediaStream | null;
   label?: string;
@@ -16,16 +15,7 @@ export interface VideoContainerProps {
   isScreenShare?: boolean;
 }
 
-export const VideoContainer: React.FC<VideoContainerProps> = (props) => {
-  // Use platform-specific implementation
-  if (Platform.OS === 'web') {
-    return <WebVideoContainer {...props} />;
-  }
-
-  return <NativeVideoContainer {...props} />;
-};
-
-// Export styles for use in platform-specific implementations
+// Define styles that will be used by platform-specific implementations
 export const videoStyles = StyleSheet.create({
   container: {
     position: 'relative',
@@ -62,3 +52,37 @@ export const videoStyles = StyleSheet.create({
     fontSize: 12,
   },
 });
+
+// Dynamically import platform implementations to avoid circular dependencies
+export const VideoContainer: React.FC<VideoContainerProps> = (props) => {
+  // Native implementation fallback
+  const NativeImplementation: React.FC<VideoContainerProps> = ({ 
+    label = '', 
+    isLocal = false,
+    isScreenShare = false 
+  }) => (
+    <View style={[videoStyles.container, isScreenShare && videoStyles.screenShare]}>
+      <View style={videoStyles.placeholderVideo}>
+        <Text style={videoStyles.placeholderText}>Video not available on this platform</Text>
+      </View>
+      <View style={videoStyles.labelContainer}>
+        <Text style={videoStyles.label}>{label || (isLocal ? 'You' : 'Peer')}</Text>
+      </View>
+    </View>
+  );
+
+  // Use web implementation on web platform
+  if (Platform.OS === 'web') {
+    // Dynamically require the web implementation
+    const WebVideoContainer = require('./platform/WebVideoContainer').WebVideoContainer;
+    return <WebVideoContainer {...props} />;
+  }
+
+  // Dynamically require the native implementation if available, or use fallback
+  try {
+    const NativeVideoContainer = require('./platform/NativeVideoContainer').NativeVideoContainer;
+    return <NativeVideoContainer {...props} />;
+  } catch (e) {
+    return <NativeImplementation {...props} />;
+  }
+};

@@ -5,7 +5,7 @@
 import React, { useEffect, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { Button, Card, Radio, RadioGroup, Text } from '@ui-kitten/components';
-import { ApiProvider, ApiType } from './ApiProvider';
+import { ApiProvider, ApiType } from '.';
 import { createLogger } from '../services/logger';
 
 interface BackendSelectorProps {

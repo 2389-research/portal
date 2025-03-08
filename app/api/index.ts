@@ -2,10 +2,7 @@
  * API module exports
  */
 
-// Re-export the interfaces and config
+// Re-export everything needed for the application
 export * from './ApiInterface';
 export * from './config';
-
-// For backward compatibility, export the adapter
-import { ApiProviderAdapter as ApiProvider } from './legacy/ApiProviderAdapter';
-export { ApiProvider };
+export * from './legacy/ApiProviderAdapter';
