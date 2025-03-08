@@ -21,7 +21,8 @@ export class FirebaseRoomManager extends FirebaseManager {
    * Create a new room
    */
   public async createRoom(userId: string): Promise<RoomResponse> {
-    if (!this.db) throw new Error('Not connected to Firebase');
+    const db = this.getDb();
+    if (!db) throw new Error('Not connected to Firebase');
 
     try {
       this.logger.info('Creating new room');
@@ -36,7 +37,7 @@ export class FirebaseRoomManager extends FirebaseManager {
       const createdTimestamp = Timestamp.fromMillis(created);
 
       // Create room in Firestore
-      const roomRef = doc(this.db, 'rooms', roomId);
+      const roomRef = doc(db, 'rooms', roomId);
       this.logger.info('Creating room document in Firestore');
       await setDoc(roomRef, {
         created: createdTimestamp,
@@ -46,7 +47,7 @@ export class FirebaseRoomManager extends FirebaseManager {
 
       // Add user to room
       this.logger.info('Adding user to room');
-      const userRef = doc(this.db, 'rooms', roomId, 'users', userId);
+      const userRef = doc(db, 'rooms', roomId, 'users', userId);
       await setDoc(userRef, {
         joined: createdTimestamp,
         active: true,
@@ -69,14 +70,15 @@ export class FirebaseRoomManager extends FirebaseManager {
    * Join an existing room
    */
   public async joinRoom(roomId: string, userId: string): Promise<JoinRoomResponse> {
-    if (!this.db) throw new Error('Not connected to Firebase');
+    const db = this.getDb();
+    if (!db) throw new Error('Not connected to Firebase');
 
     try {
       this.logger.info('Joining room:', roomId);
       this.logger.info('User ID:', userId);
 
       // Check if room exists
-      const roomRef = doc(this.db, 'rooms', roomId);
+      const roomRef = doc(db, 'rooms', roomId);
       this.logger.info('Checking if room exists');
       const roomSnapshot = await getDoc(roomRef);
 
@@ -97,7 +99,7 @@ export class FirebaseRoomManager extends FirebaseManager {
         });
 
         // Add user to room
-        const userRef = doc(this.db, 'rooms', roomId, 'users', userId);
+        const userRef = doc(db, 'rooms', roomId, 'users', userId);
         await setDoc(userRef, {
           joined: createdTimestamp,
           active: true,
@@ -117,7 +119,7 @@ export class FirebaseRoomManager extends FirebaseManager {
 
       // Add user to room
       this.logger.info('Adding user to existing room');
-      const userRef = doc(this.db, 'rooms', roomId, 'users', userId);
+      const userRef = doc(db, 'rooms', roomId, 'users', userId);
       await setDoc(userRef, {
         joined: joinedTimestamp,
         active: true,
@@ -139,13 +141,14 @@ export class FirebaseRoomManager extends FirebaseManager {
    * Leave a room
    */
   public async leaveRoom(roomId: string, userId: string): Promise<void> {
-    if (!this.db) throw new Error('Not connected to Firebase');
+    const db = this.getDb();
+    if (!db) throw new Error('Not connected to Firebase');
 
     try {
       this.logger.info('Leaving room:', roomId, 'User:', userId);
       
       // Mark user as inactive
-      const userRef = doc(this.db, 'rooms', roomId, 'users', userId);
+      const userRef = doc(db, 'rooms', roomId, 'users', userId);
       await setDoc(
         userRef,
         {

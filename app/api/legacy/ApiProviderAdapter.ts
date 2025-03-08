@@ -1,10 +1,11 @@
 /**
  * Legacy ApiProvider with Singleton Pattern
  * This provides backward compatibility with existing code
+ * Now using the new consolidated FirebaseApiClient implementation
  */
 
 import { ApiInterface } from '../ApiInterface';
-import { FirebaseApiClient } from '../firebase/FirebaseApiClient';
+import { FirebaseApiClient } from '../FirebaseApiClient';
 import { config } from '../config';
 import { createLogger } from '../../services/logger';
 
@@ -54,7 +55,7 @@ export class ApiProvider {
       this.apiType = null;
     }
 
-    // Create the Firebase client
+    // Create the consolidated Firebase client that uses manager classes internally
     this.apiClient = new FirebaseApiClient(config.firebase);
 
     // Connect to the API

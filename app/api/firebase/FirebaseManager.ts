@@ -1,5 +1,6 @@
 /**
  * Base Firebase manager class that handles app initialization and connection
+ * Uses protected fields and public accessors for better encapsulation
  */
 
 import { initializeApp, getApp, FirebaseApp, FirebaseOptions } from 'firebase/app';
@@ -7,8 +8,8 @@ import { getFirestore, Firestore } from 'firebase/firestore';
 import { createLogger } from '../../services/logger';
 
 export class FirebaseManager {
-  public app: FirebaseApp | null = null;
-  public db: Firestore | null = null;
+  protected app: FirebaseApp | null = null;
+  protected db: Firestore | null = null;
   protected config: FirebaseOptions;
   protected logger = createLogger('Firebase');
 
@@ -48,6 +49,22 @@ export class FirebaseManager {
     // Firestore doesn't require explicit cleanup for basic usage
     this.db = null;
     this.logger.info('Disconnected from Firebase');
+  }
+
+  /**
+   * Get the Firebase app instance
+   * @returns The Firebase app instance or null if not connected
+   */
+  public getApp(): FirebaseApp | null {
+    return this.app;
+  }
+
+  /**
+   * Get the Firestore database instance
+   * @returns The Firestore database instance or null if not connected
+   */
+  public getDb(): Firestore | null {
+    return this.db;
   }
 
   /**
