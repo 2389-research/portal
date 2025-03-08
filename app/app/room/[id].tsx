@@ -342,8 +342,17 @@ export default function RoomScreen() {
 
     // Cleanup on unmount
     return () => {
+      console.log('[Room] Component unmounting, performing cleanup');
       clearTimeout(timeoutId);
-      cleanup();
+      
+      // Use an immediately invoked async function to ensure cleanup completes
+      (async () => {
+        try {
+          await cleanup();
+        } catch (error) {
+          console.error('[Room] Error during cleanup on unmount:', error);
+        }
+      })();
     };
   }, [roomId]);
 
@@ -516,31 +525,73 @@ export default function RoomScreen() {
 
   // Cleanup resources
   const cleanup = async () => {
-    // Leave room via signaling
-    if (signalingService.current) {
-      await signalingService.current.leaveRoom();
-    }
-
-    // Close WebRTC connections
+    console.log('[Room] Starting cleanup...');
+    
+    // Reset states first to avoid any component updates during cleanup
+    setRemoteStreams(new Map());
+    setChatMessages([]);
+    setChatReady(false);
+    
+    // Close WebRTC connections first to stop any media streams
     if (webrtcManager.current) {
-      webrtcManager.current.close();
+      console.log('[Room] Closing WebRTC connections');
+      try {
+        webrtcManager.current.close();
+      } catch (error) {
+        console.error('[Room] Error closing WebRTC:', error);
+      }
+      webrtcManager.current = null;
     }
 
-    // Close chat
+    // Close chat connections
     if (chatManager.current) {
-      chatManager.current.close();
+      console.log('[Room] Closing chat manager');
+      try {
+        chatManager.current.close();
+      } catch (error) {
+        console.error('[Room] Error closing chat manager:', error);
+      }
+      chatManager.current = null;
     }
 
-    // Stop media
+    // Stop media streams
     if (mediaManager.current) {
-      mediaManager.current.stop();
+      console.log('[Room] Stopping media streams');
+      try {
+        mediaManager.current.stop();
+      } catch (error) {
+        console.error('[Room] Error stopping media:', error);
+      }
+      mediaManager.current = null;
     }
 
     // Stop screen sharing
     if (screenShareStream) {
-      screenShareStream.getTracks().forEach((track) => track.stop());
+      console.log('[Room] Stopping screen share');
+      try {
+        screenShareStream.getTracks().forEach((track) => track.stop());
+      } catch (error) {
+        console.error('[Room] Error stopping screen share:', error);
+      }
       setScreenShareStream(null);
     }
+    
+    // Leave room via signaling (do this last to ensure all other cleanup completes)
+    if (signalingService.current) {
+      console.log('[Room] Leaving room via signaling service');
+      try {
+        await signalingService.current.leaveRoom();
+      } catch (error) {
+        console.error('[Room] Error leaving room:', error);
+      }
+      signalingService.current = null;
+    }
+    
+    // Clean up local references
+    setLocalStream(null);
+    setUserId(null);
+    
+    console.log('[Room] Cleanup complete');
   };
 
   // Copy room ID to clipboard

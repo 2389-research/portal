@@ -81,16 +81,22 @@ export class SignalingService {
   /**
    * Send a signaling message
    */
-  public async sendMessage(type: string, data: any, receiver?: string): Promise<void> {
-    if (!this.roomId || !this.userId) {
+  public async sendMessage(type: string, data: any, receiver?: string, forceRoomId?: string, forceSenderId?: string): Promise<void> {
+    // Allow force sending with specific room and user IDs (used when leaving a room)
+    const roomId = forceRoomId || this.roomId;
+    const userId = forceSenderId || this.userId;
+    
+    if (!roomId || !userId) {
+      console.error('[Signaling] Cannot send message, not connected to a room');
       throw new Error('Not connected to a room');
     }
 
     const message: SignalingMessage = {
       type,
-      sender: this.userId,
-      roomId: this.roomId,
+      sender: userId,
+      roomId: roomId,
       data,
+      timestamp: Date.now() // Add timestamp to outgoing messages
     };
 
     if (receiver) {
@@ -98,9 +104,10 @@ export class SignalingService {
     }
 
     try {
-      await this.apiClient.sendSignal(this.roomId, message);
+      console.log(`[Signaling] Sending message type: ${type} to room: ${roomId}`);
+      await this.apiClient.sendSignal(roomId, message);
     } catch (error) {
-      console.error('Error sending message:', error);
+      console.error('[Signaling] Error sending message:', error);
       throw error;
     }
   }
@@ -138,14 +145,19 @@ export class SignalingService {
    * Stop polling for messages
    */
   private stopPolling(): void {
-    if (!this.isPolling) return;
-
+    console.log('[Signaling] Stopping polling. Current polling state:', this.isPolling);
+    
+    // Always try to clear the interval, even if isPolling is false
     if (this.pollingInterval) {
+      console.log('[Signaling] Clearing polling interval');
       clearInterval(this.pollingInterval);
       this.pollingInterval = null;
     }
-
+    
+    // Reset the polling state
     this.isPolling = false;
+    
+    console.log('[Signaling] Polling stopped');
   }
 
   /**
@@ -212,23 +224,49 @@ export class SignalingService {
    * Leave the current room
    */
   public async leaveRoom(): Promise<void> {
-    if (!this.roomId || !this.userId) return;
+    console.log('[Signaling] Leaving room, roomId:', this.roomId, 'userId:', this.userId);
+    
+    // Always stop polling, even if not in a room
+    this.stopPolling();
+    
+    if (!this.roomId || !this.userId) {
+      console.log('[Signaling] Not connected to a room, nothing to leave');
+      return;
+    }
 
     try {
-      // Stop polling for messages
-      this.stopPolling();
-
+      // Save room and user ID for API calls
+      const roomIdToLeave = this.roomId;
+      const userIdToLeave = this.userId;
+      
+      // Clear state immediately to prevent any more polling
+      this.roomId = null;
+      this.userId = null;
+      
       // Notify other users that we're leaving
-      await this.sendMessage('user-left', { userId: this.userId });
+      console.log('[Signaling] Sending user-left message');
+      try {
+        await this.sendMessage('user-left', { userId: userIdToLeave }, undefined, roomIdToLeave, userIdToLeave);
+      } catch (sendError) {
+        console.error('[Signaling] Error sending leave message:', sendError);
+        // Continue with leaving even if the message fails
+      }
 
       // Leave the room via API
-      await this.apiClient.leaveRoom(this.roomId, this.userId);
-
+      console.log('[Signaling] Calling API leaveRoom');
+      await this.apiClient.leaveRoom(roomIdToLeave, userIdToLeave);
+      
+      // Clear all handlers
+      this.messageHandlers.clear();
+      
+      console.log('[Signaling] Successfully left room');
+    } catch (error) {
+      console.error('[Signaling] Error leaving room:', error);
+      
+      // Make sure state is reset even on error
       this.roomId = null;
       this.userId = null;
       this.messageHandlers.clear();
-    } catch (error) {
-      console.error('Error leaving room:', error);
     }
   }
 
