@@ -40,6 +40,12 @@ jest.mock('firebase/firestore', () => ({
 }));
 
 // Mock navigator media devices
+// First ensure navigator exists in the global object
+if (!global.navigator) {
+  global.navigator = {};
+}
+
+// Then define the mediaDevices property
 Object.defineProperty(global.navigator, 'mediaDevices', {
   value: {
     getUserMedia: jest.fn().mockImplementation(() =>

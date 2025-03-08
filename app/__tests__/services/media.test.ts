@@ -51,6 +51,11 @@ describe('MediaManager', () => {
       { kind: 'audiooutput', deviceId: 'output1', label: 'Output 1' },
     ]);
 
+    // Ensure navigator exists in the global object
+    if (!global.navigator) {
+      global.navigator = {};
+    }
+    
     // Assign mock to navigator.mediaDevices using Object.defineProperty
     Object.defineProperty(global.navigator, 'mediaDevices', {
       value: mockMediaDevices,
