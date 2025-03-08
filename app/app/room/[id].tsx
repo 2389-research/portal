@@ -109,10 +109,10 @@ export default function RoomScreen() {
     
     // Phase-specific timeouts
     const phaseTimeouts = {
-      auth: 10000,      // 10 seconds for auth
+      auth: 30000,      // 30 seconds for auth (increased from 10s)
       media: 30000,     // 30 seconds for media
       webrtc: 30000,    // 30 seconds for WebRTC
-      signaling: 20000, // 20 seconds for signaling
+      signaling: 30000, // 30 seconds for signaling (increased from 20s)
       chat: 20000       // 20 seconds for chat
     };
     
@@ -122,25 +122,70 @@ export default function RoomScreen() {
         if (initPhase === phase && loading) {
           console.error(`[Room] Phase '${phase}' initialization timed out after ${phaseTimeouts[phase]/1000} seconds`);
           
-          // For media phase, offer to skip media access
-          if (phase === 'media') {
-            Alert.alert(
-              'Media Initialization Timeout',
-              'Camera and microphone are taking too long to initialize. Would you like to continue without media?',
-              [
-                { text: 'No, keep trying', style: 'cancel' },
-                { 
-                  text: 'Yes, skip media', 
-                  onPress: () => {
-                    setSkipMediaAccess(true);
-                    setInitPhase('signaling');
+          // Handle timeout based on the phase
+          switch(phase) {
+            case 'auth':
+              // For auth phase, just log error and continue to next phase
+              console.warn('[Room] Auth phase timed out, but continuing with initialization');
+              setInitPhase('media');
+              // Don't set error or stop loading, just move to next phase
+              break;
+              
+            case 'media':
+              // For media phase, offer to skip media access
+              Alert.alert(
+                'Media Initialization Timeout',
+                'Camera and microphone are taking too long to initialize. Would you like to continue without media?',
+                [
+                  { text: 'No, keep trying', style: 'cancel' },
+                  { 
+                    text: 'Yes, skip media', 
+                    onPress: () => {
+                      setSkipMediaAccess(true);
+                      setInitPhase('signaling');
+                    }
                   }
-                }
-              ]
-            );
-          } else {
-            setError(`Room initialization timed out during ${phase} phase. Please try again or skip media access.`);
-            setLoading(false);
+                ]
+              );
+              break;
+              
+            case 'webrtc':
+              // For WebRTC phase, offer to skip WebRTC (which means skipping media)
+              Alert.alert(
+                'WebRTC Initialization Timeout',
+                'Video connection setup is taking too long. Would you like to continue without video?',
+                [
+                  { text: 'No, keep trying', style: 'cancel' },
+                  { 
+                    text: 'Yes, skip video', 
+                    onPress: () => {
+                      setSkipMediaAccess(true);
+                      setInitPhase('signaling');
+                    }
+                  }
+                ]
+              );
+              break;
+              
+            case 'signaling':
+              // For signaling, this is critical so we stop with an error
+              setError(`Room initialization timed out during signaling phase. Please try again later.`);
+              setLoading(false);
+              break;
+              
+            case 'chat':
+              // For chat, we can continue without it
+              console.warn('[Room] Chat initialization timed out, but continuing without chat');
+              setChatReady(false);
+              setInitPhase('complete');
+              // Don't block the UI on chat initialization
+              setLoading(false);
+              break;
+              
+            default:
+              // Generic fallback
+              setError(`Room initialization timed out during ${phase} phase. Please try again.`);
+              setLoading(false);
           }
         }
       }, phaseTimeouts[phase]);
@@ -157,38 +202,50 @@ export default function RoomScreen() {
         watchPhaseTimeout('auth');
         
         console.log('[Room] Auth phase: Getting API provider');
-        // Get API provider
-        const provider = ApiProvider.getInstance();
-        const apiClient = provider.getApiClient();
+        // Get API provider - wrap in try/catch to continue even if auth fails
+        let apiClient;
+        try {
+          const provider = ApiProvider.getInstance();
+          apiClient = provider.getApiClient();
+          console.log('[Room] API provider type:', provider.getApiType());
 
-        console.log('[Room] API provider type:', provider.getApiType());
-
-        if (!apiClient) {
-          throw new Error('API client not initialized');
+          if (!apiClient) {
+            console.warn('[Room] API client not initialized, proceeding with limited functionality');
+          } else {
+            // Check auth status if using Firebase
+            if (apiClient.getProviderName() === 'Firebase' && apiClient.getCurrentUser) {
+              const user = apiClient.getCurrentUser();
+              console.log(
+                '[Room] Current user:',
+                user ? `${user.displayName} (${user.uid})` : 'Not signed in'
+              );
+            }
+          }
+        } catch (authError) {
+          console.error('[Room] Auth error (continuing):', authError);
+          // We'll still try to continue even with auth issues
         }
-
-        // Check auth status if using Firebase
-        if (apiClient.getProviderName() === 'Firebase' && apiClient.getCurrentUser) {
-          const user = apiClient.getCurrentUser();
-          console.log(
-            '[Room] Current user:',
-            user ? `${user.displayName} (${user.uid})` : 'Not signed in'
-          );
-        }
+        
+        // Move to next phase immediately after checking auth
+        setInitPhase('media');
+        // Start the media phase timeout
+        watchPhaseTimeout('media');
         
         // Start initializing signaling early (in parallel with media)
         console.log('[Room] Pre-initializing signaling service');
-        signalingService.current = new SignalingService(apiClient);
+        if (apiClient) {
+          signalingService.current = new SignalingService(apiClient);
+        } else {
+          console.error('[Room] Cannot initialize signaling without API client');
+          setError('Could not initialize app. API client unavailable.');
+          setLoading(false);
+          return;
+        }
         
         // Initialize media (if not skipping)
         let stream = null;
         if (!skipMediaAccess) {
           try {
-            // Begin media initialization phase
-            setInitPhase('media');
-            // Start the media phase timeout
-            watchPhaseTimeout('media');
-            
             console.log('[Room] Media phase: Initializing camera and microphone');
             mediaManager.current = new MediaManager();
             
@@ -383,56 +440,44 @@ export default function RoomScreen() {
 
     // Run initialization sequence
     const startInitialization = async () => {
-      // First check authentication
-      const isAuthed = await checkAuth();
-      if (!isAuthed) {
-        // If not authenticated, don't proceed
-        console.log('[Room] Authentication required');
-        setError('Please sign in to join this room');
-        setLoading(false);
-        return;
-      }
-
-      // Then check media support
-      const hasMediaSupport = await checkMediaSupport();
-      console.log('[Room] Media support check result:', hasMediaSupport);
-
-      if (!hasMediaSupport) {
-        console.log('[Room] Proceeding without media support');
-        setSkipMediaAccess(true);
-
-        // Skip media initialization entirely
+      try {
+        // Try to check authentication, but don't block on it
         try {
-          console.log('[Room] Starting initialization without media');
-          const provider = ApiProvider.getInstance();
-          const apiClient = provider.getApiClient();
-
-          if (!apiClient) {
-            throw new Error('API client not initialized');
+          const isAuthed = await checkAuth();
+          if (!isAuthed) {
+            // Log warning but still continue
+            console.warn('[Room] Authentication check failed, proceeding anyway');
           }
-
-          // Initialize signaling only
-          console.log('[Room] Initializing signaling service');
-          signalingService.current = new SignalingService(apiClient);
-
-          // Join room without media
-          console.log('[Room] Joining room without media:', roomId);
-          const newUserId = await signalingService.current.joinRoom(roomId as string);
-          setUserId(newUserId);
-          console.log('[Room] Joined room with user ID:', newUserId);
-
-          setConnected(true);
-          setLoading(false);
-        } catch (error) {
-          console.error('[Room] Error in no-media initialization:', error);
-          setError(`Failed to join room: ${error.message}`);
-          setLoading(false);
+        } catch (authError) {
+          console.error('[Room] Auth check error (continuing):', authError);
+          // Don't block on auth errors
         }
-        return; // Skip the regular initialization
+  
+        // Check media support
+        let hasMediaSupport = false;
+        try {
+          hasMediaSupport = await checkMediaSupport();
+          console.log('[Room] Media support check result:', hasMediaSupport);
+        } catch (mediaCheckError) {
+          console.error('[Room] Error checking media support:', mediaCheckError);
+          // Assume no support on error
+          hasMediaSupport = false;
+        }
+  
+        if (!hasMediaSupport) {
+          console.log('[Room] Proceeding without media support');
+          setSkipMediaAccess(true);
+        }
+        
+        // Always use the main initialization flow, which now handles both
+        // media and no-media paths
+        await initializeRoom();
+        
+      } catch (error) {
+        console.error('[Room] Fatal error in initialization sequence:', error);
+        setError(`Failed to initialize: ${error.message || 'Unknown error'}`);
+        setLoading(false);
       }
-
-      // Only try to initialize with media if we have support and permission
-      await initializeRoom();
     };
 
     startInitialization();
