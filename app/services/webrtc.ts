@@ -2,6 +2,7 @@
  * WebRTC Manager for Expo
  * This is a React Native-friendly wrapper for the WebRTC API
  */
+import { createLogger } from './logger';
 
 interface PeerConfig {
   iceServers: RTCIceServer[];
@@ -17,6 +18,7 @@ export class WebRTCManager {
   private onNegotiationNeededCallback: (() => void) | null = null;
   private onTrackCallback: ((stream: MediaStream, peerId: string) => void) | null = null;
   private onDataChannelCallback: ((channel: RTCDataChannel) => void) | null = null;
+  private logger = createLogger('WebRTC');
 
   constructor(config?: Partial<PeerConfig>) {
     this.peerConfig = {
@@ -38,7 +40,7 @@ export class WebRTCManager {
       ...config,
     };
     
-    console.log('[WebRTC] Initialized with ICE servers:', JSON.stringify(this.peerConfig.iceServers));
+    this.logger.info('Initialized with ICE servers:', JSON.stringify(this.peerConfig.iceServers));
   }
 
   /**
@@ -80,23 +82,23 @@ export class WebRTCManager {
     };
 
     this.peerConnection.ondatachannel = (event) => {
-      console.log('[WebRTC] Data channel received from remote peer:', event.channel.label);
+      this.logger.info('Data channel received from remote peer:', event.channel.label);
       this.dataChannel = event.channel;
       
       // Setup data channel event handlers
       this.dataChannel.onopen = () => {
-        console.log(`[WebRTC] Received data channel '${this.dataChannel?.label}' opened`);
+        this.logger.info(`Received data channel '${this.dataChannel?.label}' opened`);
       };
       
       this.dataChannel.onclose = () => {
-        console.log(`[WebRTC] Received data channel '${this.dataChannel?.label}' closed`);
+        this.logger.info(`Received data channel '${this.dataChannel?.label}' closed`);
       };
       
       this.dataChannel.onerror = (err) => {
-        console.error(`[WebRTC] Received data channel '${this.dataChannel?.label}' error:`, err);
+        this.logger.error(`Received data channel '${this.dataChannel?.label}' error:`, err);
       };
       
-      console.log('[WebRTC] Received data channel state:', this.dataChannel.readyState);
+      this.logger.info('Received data channel state:', this.dataChannel.readyState);
       
       if (this.onDataChannelCallback) {
         this.onDataChannelCallback(this.dataChannel);
@@ -109,12 +111,12 @@ export class WebRTCManager {
    */
   public createDataChannel(label: string): RTCDataChannel | null {
     if (!this.peerConnection) {
-      console.error('[WebRTC] Peer connection not initialized when creating data channel');
+      this.logger.error('Peer connection not initialized when creating data channel');
       return null;
     }
 
     try {
-      console.log('[WebRTC] Creating data channel with label:', label);
+      this.logger.info('Creating data channel with label:', label);
       
       // Create the data channel with specific options
       this.dataChannel = this.peerConnection.createDataChannel(label, {
@@ -124,21 +126,21 @@ export class WebRTCManager {
       
       // Setup data channel event handlers
       this.dataChannel.onopen = () => {
-        console.log(`[WebRTC] Data channel '${label}' opened`);
+        this.logger.info(`Data channel '${label}' opened`);
       };
       
       this.dataChannel.onclose = () => {
-        console.log(`[WebRTC] Data channel '${label}' closed`);
+        this.logger.info(`Data channel '${label}' closed`);
       };
       
       this.dataChannel.onerror = (event) => {
-        console.error(`[WebRTC] Data channel '${label}' error:`, event);
+        this.logger.error(`Data channel '${label}' error:`, event);
       };
       
-      console.log('[WebRTC] Data channel created successfully, state:', this.dataChannel.readyState);
+      this.logger.info('Data channel created successfully, state:', this.dataChannel.readyState);
       return this.dataChannel;
     } catch (error) {
-      console.error('[WebRTC] Error creating data channel:', error);
+      this.logger.error('Error creating data channel:', error);
       return null;
     }
   }

@@ -10,15 +10,17 @@ import { MediaControls } from '../../components/MediaControls';
 import { DeviceSettings } from '../../components/DeviceSettings';
 
 // Import services
-import { ApiProvider } from '../../api/ApiProvider';
+import { ApiProvider } from '../../api';
 import { MediaManager } from '../../services/media';
 import { WebRTCManager } from '../../services/webrtc';
 import { SignalingService } from '../../services/signaling';
 import { ChatManager, ChatMessage } from '../../services/chat';
+import { createLogger } from '../../services/logger';
 
 export default function RoomScreen() {
   const { id: roomId } = useLocalSearchParams();
   const router = useRouter();
+  const logger = createLogger('Room');
 
   // State for managing room
   const [loading, setLoading] = useState(true);
@@ -80,13 +82,13 @@ export default function RoomScreen() {
         const user = apiClient.getCurrentUser();
 
         if (!user) {
-          console.log('[Room] User not authenticated');
+          logger.info('User not authenticated');
           setError('Please sign in to join a room');
           setLoading(false);
           return false;
         }
 
-        console.log('[Room] User authenticated:', user.displayName);
+        logger.info('User authenticated:', user.displayName);
         setIsAuthenticated(true);
         return true;
       }
@@ -101,7 +103,7 @@ export default function RoomScreen() {
     // Master timeout as a safety net (2 minutes total)
     timeouts.push(setTimeout(() => {
       if (loading) {
-        console.error('[Room] Room initialization timed out after 120 seconds (master timeout)');
+        logger.error('Room initialization timed out after 120 seconds (master timeout)');
         setError('Room initialization timed out. Please try again or skip media access.');
         setLoading(false);
       }
@@ -120,13 +122,13 @@ export default function RoomScreen() {
     const watchPhaseTimeout = (phase: 'auth' | 'media' | 'webrtc' | 'signaling' | 'chat') => {
       const timeoutId = setTimeout(() => {
         if (initPhase === phase && loading) {
-          console.error(`[Room] Phase '${phase}' initialization timed out after ${phaseTimeouts[phase]/1000} seconds`);
+          logger.error(`Phase '${phase}' initialization timed out after ${phaseTimeouts[phase]/1000} seconds`);
           
           // Handle timeout based on the phase
           switch(phase) {
             case 'auth':
               // For auth phase, just log error and continue to next phase
-              console.warn('[Room] Auth phase timed out, but continuing with initialization');
+              logger.warn('Auth phase timed out, but continuing with initialization');
               setInitPhase('media');
               // Don't set error or stop loading, just move to next phase
               break;
@@ -195,13 +197,13 @@ export default function RoomScreen() {
     };
 
     const initializeRoom = async () => {
-      console.log('[Room] Starting initialization sequence');
+      logger.info('Starting initialization sequence');
       try {
         setInitPhase('auth');
         // Start the auth phase timeout
         watchPhaseTimeout('auth');
         
-        console.log('[Room] Auth phase: Getting API provider');
+        logger.info('Auth phase: Getting API provider');
         // Get API provider - wrap in try/catch to continue even if auth fails
         let apiClient;
         try {

@@ -2,8 +2,9 @@ import React, { useState } from 'react';
 import { StyleSheet, View, Alert, Platform } from 'react-native';
 import { Card, Text, Input, Button, Divider, Spinner, Layout } from '@ui-kitten/components';
 import { useRouter } from 'expo-router';
-import { ApiProvider } from '../api/ApiProvider';
+import { ApiProvider } from '../api';
 import { Login } from '../components/Login';
+import { createLogger } from '../services/logger';
 
 export default function HomeScreen() {
   const [roomId, setRoomId] = useState('');
@@ -11,6 +12,7 @@ export default function HomeScreen() {
   const [error, setError] = useState<string | null>(null);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const router = useRouter();
+  const logger = createLogger('Home');
 
   // API is already initialized in _layout.tsx
   // We just need to check for auth state on component mount
@@ -21,18 +23,18 @@ export default function HomeScreen() {
         const apiClient = provider.getApiClient();
 
         if (!apiClient) {
-          console.error('[Home] API client not initialized');
+          logger.error('API client not initialized');
           setError('Failed to connect to authentication service. Please refresh the page.');
           return;
         }
 
         if (apiClient.getCurrentUser && apiClient.isSignedIn) {
           const isSignedIn = apiClient.isSignedIn();
-          console.log('[Home] Initial auth check:', isSignedIn ? 'Signed in' : 'Not signed in');
+          logger.info('Initial auth check:', isSignedIn ? 'Signed in' : 'Not signed in');
           setIsLoggedIn(isSignedIn);
         }
       } catch (error) {
-        console.error('[Home] Error checking auth state:', error);
+        logger.error('Error checking auth state:', error);
       }
     };
 
@@ -60,7 +62,7 @@ export default function HomeScreen() {
         params: { id: result.roomId },
       });
     } catch (error) {
-      console.error('Error creating room:', error);
+      logger.error('Error creating room:', error);
       setError('Failed to create room. Please try again.');
     } finally {
       setLoading(false);
@@ -91,7 +93,7 @@ export default function HomeScreen() {
       <View style={styles.content}>
         <Login
           onLoginStateChange={(loggedIn) => {
-            console.log('Login state changed:', loggedIn);
+            logger.info('Login state changed:', loggedIn);
             setIsLoggedIn(loggedIn);
           }}
         />
