@@ -26,6 +26,7 @@ export default function RoomScreen() {
   const [connected, setConnected] = useState(false);
   const [userId, setUserId] = useState<string | null>(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [initPhase, setInitPhase] = useState<'auth' | 'media' | 'webrtc' | 'signaling' | 'chat' | 'complete'>('auth');
 
   // State for media controls
   const [audioEnabled, setAudioEnabled] = useState(true);
@@ -94,20 +95,68 @@ export default function RoomScreen() {
       return true;
     };
 
-    // Set a timeout to prevent indefinite loading, but with a longer duration
-    const timeoutId = setTimeout(() => {
+    // Set multiple timeouts for different initialization phases
+    const timeouts: NodeJS.Timeout[] = [];
+    
+    // Master timeout as a safety net (2 minutes total)
+    timeouts.push(setTimeout(() => {
       if (loading) {
-        console.error('[Room] Room initialization timed out after 60 seconds');
+        console.error('[Room] Room initialization timed out after 120 seconds (master timeout)');
         setError('Room initialization timed out. Please try again or skip media access.');
         setLoading(false);
       }
-    }, 60000); // Extended to 60 seconds to allow more time for WebRTC
+    }, 120000));
+    
+    // Phase-specific timeouts
+    const phaseTimeouts = {
+      auth: 10000,      // 10 seconds for auth
+      media: 30000,     // 30 seconds for media
+      webrtc: 30000,    // 30 seconds for WebRTC
+      signaling: 20000, // 20 seconds for signaling
+      chat: 20000       // 20 seconds for chat
+    };
+    
+    // Create a timeout watcher function
+    const watchPhaseTimeout = (phase: 'auth' | 'media' | 'webrtc' | 'signaling' | 'chat') => {
+      const timeoutId = setTimeout(() => {
+        if (initPhase === phase && loading) {
+          console.error(`[Room] Phase '${phase}' initialization timed out after ${phaseTimeouts[phase]/1000} seconds`);
+          
+          // For media phase, offer to skip media access
+          if (phase === 'media') {
+            Alert.alert(
+              'Media Initialization Timeout',
+              'Camera and microphone are taking too long to initialize. Would you like to continue without media?',
+              [
+                { text: 'No, keep trying', style: 'cancel' },
+                { 
+                  text: 'Yes, skip media', 
+                  onPress: () => {
+                    setSkipMediaAccess(true);
+                    setInitPhase('signaling');
+                  }
+                }
+              ]
+            );
+          } else {
+            setError(`Room initialization timed out during ${phase} phase. Please try again or skip media access.`);
+            setLoading(false);
+          }
+        }
+      }, phaseTimeouts[phase]);
+      
+      timeouts.push(timeoutId);
+      return timeoutId;
+    };
 
     const initializeRoom = async () => {
-      console.log('[Room] PHASE 1: Starting initialization sequence');
+      console.log('[Room] Starting initialization sequence');
       try {
-        console.log('[Room] Starting room initialization');
-
+        setInitPhase('auth');
+        // Start the auth phase timeout
+        watchPhaseTimeout('auth');
+        
+        console.log('[Room] Auth phase: Getting API provider');
         // Get API provider
         const provider = ApiProvider.getInstance();
         const apiClient = provider.getApiClient();
@@ -126,115 +175,162 @@ export default function RoomScreen() {
             user ? `${user.displayName} (${user.uid})` : 'Not signed in'
           );
         }
-
+        
+        // Start initializing signaling early (in parallel with media)
+        console.log('[Room] Pre-initializing signaling service');
+        signalingService.current = new SignalingService(apiClient);
+        
         // Initialize media (if not skipping)
         let stream = null;
         if (!skipMediaAccess) {
           try {
-            console.log('[Room] Initializing media');
+            // Begin media initialization phase
+            setInitPhase('media');
+            // Start the media phase timeout
+            watchPhaseTimeout('media');
+            
+            console.log('[Room] Media phase: Initializing camera and microphone');
             mediaManager.current = new MediaManager();
-            stream = await mediaManager.current.initialize({ video: true, audio: true });
+            
+            // Initialize media with a promise race to avoid hanging
+            const mediaPromise = mediaManager.current.initialize({ video: true, audio: true });
+            
+            // Create a media timeout promise
+            const mediaTimeoutPromise = new Promise((_, reject) => {
+              setTimeout(() => {
+                reject(new Error('Media initialization timed out after 20 seconds'));
+              }, 20000);
+            });
+            
+            // Race the media initialization against the timeout
+            stream = await Promise.race([mediaPromise, mediaTimeoutPromise]) as MediaStream;
+            
+            // Show local video as soon as camera is ready, without waiting for other steps
+            console.log('[Room] Camera initialized, displaying local stream immediately');
             setLocalStream(stream);
-            console.log('[Room] Media initialized, got stream:', stream ? 'yes' : 'no');
-
-            // Get device lists
-            console.log('[Room] Enumerating devices');
-            const devices = await mediaManager.current.enumerateDevices();
-            setAudioInputDevices(mediaManager.current.getAudioInputDevices());
-            setVideoInputDevices(mediaManager.current.getVideoInputDevices());
-            setAudioOutputDevices(mediaManager.current.getAudioOutputDevices());
-            console.log(
-              '[Room] Found devices:',
-              'audio:',
-              mediaManager.current.getAudioInputDevices().length,
-              'video:',
-              mediaManager.current.getVideoInputDevices().length
-            );
-
-            // Initialize WebRTC
-            console.log('[Room] Initializing WebRTC');
+            
+            // Start enumerating devices and initializing WebRTC in parallel
+            const deviceEnumPromise = (async () => {
+              console.log('[Room] Enumerating media devices in background');
+              try {
+                const devices = await mediaManager.current!.enumerateDevices();
+                setAudioInputDevices(mediaManager.current!.getAudioInputDevices());
+                setVideoInputDevices(mediaManager.current!.getVideoInputDevices());
+                setAudioOutputDevices(mediaManager.current!.getAudioOutputDevices());
+              } catch (error) {
+                console.error('[Room] Error enumerating devices (non-critical):', error);
+                // Non-fatal, continue with initialization
+              }
+            })();
+            
+            // Begin WebRTC initialization phase
+            setInitPhase('webrtc');
+            // Start the webrtc phase timeout
+            watchPhaseTimeout('webrtc');
+            
+            console.log('[Room] WebRTC phase: Initializing connection');
             webrtcManager.current = new WebRTCManager();
+            
+            // Initialize WebRTC with the stream
             await webrtcManager.current.initialize(stream);
             console.log('[Room] WebRTC initialized');
+            
+            // Setup WebRTC callbacks
+            webrtcManager.current.setOnTrack((remoteStream, peerId) => {
+              console.log('[Room] Received remote stream from peer:', peerId);
+              setRemoteStreams((prev) => {
+                const newStreams = new Map(prev);
+                newStreams.set(peerId, remoteStream);
+                return newStreams;
+              });
+            });
+            
+            // Wait for device enumeration to complete (non-blocking for UI)
+            deviceEnumPromise.catch(error => {
+              console.error('[Room] Device enumeration error (continuing):', error);
+            });
+            
           } catch (mediaError) {
             console.error('[Room] Media access error:', mediaError);
             // Store the error but don't throw it yet
             setMediaError(mediaError.message || 'Failed to access camera/microphone');
-            // We'll let the useEffect handle this error
-            throw mediaError;
+            // Don't rethrow, we'll continue with signaling
+            console.log('[Room] Continuing without media due to error');
+            setSkipMediaAccess(true);
           }
         } else {
-          console.log('[Room] Skipping media initialization');
+          console.log('[Room] Skipping media initialization as requested');
         }
 
-        // Setup WebRTC callbacks if WebRTC is initialized
-        if (webrtcManager.current && !skipMediaAccess) {
-          webrtcManager.current.setOnTrack((stream, peerId) => {
-            console.log('[Room] Received remote stream from peer:', peerId);
-            setRemoteStreams((prev) => {
-              const newStreams = new Map(prev);
-              newStreams.set(peerId, stream);
-              return newStreams;
-            });
-          });
-        }
-
-        // Initialize signaling
-        console.log('[Room] Initializing signaling service');
-        signalingService.current = new SignalingService(apiClient);
-
+        // Begin signaling phase - this runs whether media succeeded or not
+        setInitPhase('signaling');
+        // Start the signaling phase timeout
+        watchPhaseTimeout('signaling');
+        
+        console.log('[Room] Signaling phase: Joining room');
+        
         // Join room
         console.log('[Room] Joining room:', roomId);
         const newUserId = await signalingService.current.joinRoom(roomId as string);
         setUserId(newUserId);
         console.log('[Room] Joined room with user ID:', newUserId);
-
-        // Initialize chat manager if WebRTC is available
-        if (!skipMediaAccess && webrtcManager.current) {
-          console.log('[Room] Initializing chat manager');
-          chatManager.current = new ChatManager(newUserId, webrtcManager.current);
-          
-          try {
-            // Initialize as initiator with async method
-            const chatInitialized = await chatManager.current.initialize(true);
-            console.log('[Room] Chat initialization result:', chatInitialized);
-            
-            // Setup chat message handler
-            chatManager.current.onMessage((message) => {
-              console.log('[Room] Received chat message from:', message.sender);
-              setChatMessages((prev) => [...prev, message]);
-            });
-            
-            // Enable chat based on initialization result
-            setChatReady(chatInitialized);
-            
-            // If chat couldn't be initialized but we have WebRTC, log warning but continue
-            if (!chatInitialized) {
-              console.warn('[Room] Chat data channel could not be established, but continuing with room');
-              // We'll still set ready to true so the timeout doesn't occur
-              setChatReady(true);
-            }
-          } catch (error) {
-            console.error('[Room] Error initializing chat:', error);
-            // Still set chatReady to true so the timeout doesn't occur
-            setChatReady(true);
-          }
-        } else {
-          console.log('[Room] Skipping chat initialization (no WebRTC)');
-          // Still set chatReady to true so the timeout doesn't occur
-          setChatReady(true);
-        }
-
+        
+        // Mark as connected as soon as signaling is established
         setConnected(true);
-
+        
         // Setup signaling handlers
         console.log('[Room] Setting up signaling handlers');
         setupSignalingHandlers();
-        console.log('[Room] Room initialization complete');
+
+        // Initialize chat in the background, but don't block UI on it
+        if (!skipMediaAccess && webrtcManager.current) {
+          // Begin chat initialization phase  
+          setInitPhase('chat');
+          // Start the chat phase timeout
+          watchPhaseTimeout('chat');
+          
+          console.log('[Room] Chat phase: Initializing chat data channel');
+          
+          // Initialize chat in the background
+          (async () => {
+            try {
+              chatManager.current = new ChatManager(newUserId, webrtcManager.current!);
+              
+              // Initialize as initiator with async method
+              const chatInitialized = await chatManager.current.initialize(true);
+              console.log('[Room] Chat initialization result:', chatInitialized);
+              
+              // Setup chat message handler
+              chatManager.current.onMessage((message) => {
+                console.log('[Room] Received chat message from:', message.sender);
+                setChatMessages((prev) => [...prev, message]);
+              });
+              
+              // Enable chat based on initialization result
+              setChatReady(chatInitialized);
+              
+              if (!chatInitialized) {
+                console.warn('[Room] Chat data channel could not be established, but continuing with room');
+              }
+            } catch (error) {
+              console.error('[Room] Error initializing chat (non-fatal):', error);
+              // Don't block room usage on chat errors
+            } finally {
+              // Complete initialization
+              setInitPhase('complete');
+            }
+          })();
+        } else {
+          console.log('[Room] Skipping chat initialization (no WebRTC)');
+          setInitPhase('complete');
+        }
+        
+        console.log('[Room] Room initialization complete, UI now active');
       } catch (error) {
         console.error('[Room] Error initializing room:', error);
         setError(`Failed to join the room: ${error.message || 'Unknown error'}`);
       } finally {
+        // Mark loading as complete
         setLoading(false);
       }
     };
@@ -344,7 +440,9 @@ export default function RoomScreen() {
     // Cleanup on unmount
     return () => {
       console.log('[Room] Component unmounting, performing cleanup');
-      clearTimeout(timeoutId);
+      
+      // Clear all timeouts
+      timeouts.forEach(id => clearTimeout(id));
       
       // Use an immediately invoked async function to ensure cleanup completes
       (async () => {
@@ -729,59 +827,67 @@ export default function RoomScreen() {
   }, [mediaError]);
 
   if (loading) {
+    // Get loading message based on current phase
+    let loadingMessage = "Joining room...";
+    let detailMessage = "";
+    
+    switch(initPhase) {
+      case 'auth':
+        loadingMessage = "Checking authentication...";
+        detailMessage = "Verifying your account before joining the room";
+        break;
+      case 'media':
+        loadingMessage = "Initializing camera and microphone...";
+        detailMessage = "This may take a moment. Please allow camera/microphone access if prompted";
+        break;
+      case 'webrtc':
+        loadingMessage = "Setting up video connection...";
+        detailMessage = "Establishing peer connections for video chat";
+        break;
+      case 'signaling':
+        loadingMessage = "Joining room...";
+        detailMessage = "Connecting to the room and other participants";
+        break;
+      case 'chat':
+        loadingMessage = "Setting up chat...";
+        detailMessage = "Almost ready! Setting up text chat functionality";
+        break;
+    }
+    
     return (
       <Layout style={styles.loadingContainer}>
         <Spinner size="large" />
-        <Text style={styles.loadingText}>Joining room...</Text>
+        <Text category="h6" style={styles.loadingText}>{loadingMessage}</Text>
+        
+        <Text category="s1" style={styles.loadingPhase}>
+          Phase {
+            initPhase === 'auth' ? '1/5' :
+            initPhase === 'media' ? '2/5' :
+            initPhase === 'webrtc' ? '3/5' :
+            initPhase === 'signaling' ? '4/5' :
+            initPhase === 'chat' ? '5/5' : ''
+          }
+        </Text>
+        
         <Text category="c1" appearance="hint" style={styles.loadingHint}>
-          This may take a moment. If you're not prompted for camera/microphone access, your browser
-          may have already blocked it or the prompt might be hidden.
+          {detailMessage}
         </Text>
 
-        <Button
-          style={styles.skipButton}
-          appearance="outline"
-          status="basic"
-          onPress={() => {
-            console.log('[Room] User manually skipped media access');
-            setSkipMediaAccess(true);
-            // Continue with initialization
-            const provider = ApiProvider.getInstance();
-            const apiClient = provider.getApiClient();
-
-            if (!apiClient) {
-              setError('API client not initialized');
-              setLoading(false);
-              return;
-            }
-
-            // Skip directly to room joining
-            const initRoomWithoutMedia = async () => {
-              try {
-                console.log('[Room] Manually initializing room without media');
-
-                // Initialize signaling
-                signalingService.current = new SignalingService(apiClient);
-
-                // Join room
-                console.log('[Room] Joining room:', roomId);
-                const newUserId = await signalingService.current.joinRoom(roomId as string);
-                setUserId(newUserId);
-
-                setConnected(true);
-                setLoading(false);
-              } catch (error) {
-                console.error('[Room] Error in manual initialization:', error);
-                setError(`Failed to join room: ${error.message}`);
-                setLoading(false);
-              }
-            };
-
-            initRoomWithoutMedia();
-          }}
-        >
-          Skip Media Access
-        </Button>
+        {(initPhase === 'media' || initPhase === 'webrtc') && (
+          <Button
+            style={styles.skipButton}
+            appearance="outline"
+            status="basic"
+            onPress={() => {
+              console.log('[Room] User manually skipped media access');
+              setSkipMediaAccess(true);
+              // Move to signaling phase directly
+              setInitPhase('signaling');
+            }}
+          >
+            Skip Media Access
+          </Button>
+        )}
       </Layout>
     );
   }
@@ -936,7 +1042,11 @@ const styles = StyleSheet.create({
   },
   loadingText: {
     marginTop: 16,
+    marginBottom: 8,
+  },
+  loadingPhase: {
     marginBottom: 16,
+    color: '#666',
   },
   loadingHint: {
     textAlign: 'center',
