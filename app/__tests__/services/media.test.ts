@@ -51,16 +51,51 @@ describe('MediaManager', () => {
       { kind: 'audiooutput', deviceId: 'output1', label: 'Output 1' },
     ]);
 
-    // Ensure navigator exists in the global object
+    // Ensure navigator exists in the global object with proper interface
     if (!global.navigator) {
-      global.navigator = {};
+      // Create a navigator mock that implements the Navigator interface
+      // Create a partial mock and cast to unknown first to avoid TypeScript errors
+      const navigatorMock = {
+        // Add minimum required properties from Navigator interface
+        credentials: {},
+        doNotTrack: '',
+        geolocation: {},
+        maxTouchPoints: 0,
+        mediaDevices: mockMediaDevices,
+        onLine: true,
+        serviceWorker: {},
+        cookieEnabled: false,
+        language: 'en-US',
+        languages: ['en-US'],
+        userAgent: 'jest',
+        vendor: 'jest',
+        vendorSub: '',
+        productSub: '',
+        platform: 'test',
+        webdriver: false,
+        hardwareConcurrency: 4,
+        appCodeName: '',
+        appName: '',
+        appVersion: '',
+        product: '',
+        userAgentData: undefined,
+        // Add clipboard property with mock functions
+        clipboard: { readText: jest.fn(), writeText: jest.fn() },
+        // Add any other required navigator methods
+        sendBeacon: jest.fn(),
+        vibrate: jest.fn(),
+        javaEnabled: jest.fn().mockReturnValue(false),
+      };
+      
+      // Use double casting to avoid TypeScript complaints
+      global.navigator = navigatorMock as unknown as Navigator;
+    } else {
+      // Assign mock to navigator.mediaDevices using Object.defineProperty
+      Object.defineProperty(global.navigator, 'mediaDevices', {
+        value: mockMediaDevices,
+        configurable: true
+      });
     }
-    
-    // Assign mock to navigator.mediaDevices using Object.defineProperty
-    Object.defineProperty(global.navigator, 'mediaDevices', {
-      value: mockMediaDevices,
-      configurable: true
-    });
 
     mediaManager = new MediaManager();
   });
@@ -132,5 +167,25 @@ describe('MediaManager', () => {
 
     expect(tracks[0].stop).toHaveBeenCalled();
     expect(tracks[1].stop).toHaveBeenCalled();
+  });
+
+  test('should stop a specific stream', async () => {
+    await mediaManager.initialize({ audio: true, video: true });
+    
+    // Create a mock stream for testing the stopLocalStream method
+    const specificMockStream = {
+      getTracks: jest.fn().mockReturnValue([
+        { kind: 'audio', label: 'Test Audio', stop: jest.fn() },
+        { kind: 'video', label: 'Test Video', stop: jest.fn() }
+      ])
+    };
+    
+    // Call the new method
+    mediaManager.stopLocalStream(specificMockStream as unknown as MediaStream);
+    
+    // Verify tracks were stopped
+    const specificTracks = specificMockStream.getTracks();
+    expect(specificTracks[0].stop).toHaveBeenCalled();
+    expect(specificTracks[1].stop).toHaveBeenCalled();
   });
 });

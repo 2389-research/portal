@@ -148,4 +148,13 @@ export class ChatManager {
   public close(): void {
     this.dataChannelManager.close();
   }
+
+  /**
+   * Dispose the chat manager and release resources
+   * This is an alias for close() to maintain API compatibility
+   */
+  public dispose(): void {
+    this.logger.info('Disposing chat manager');
+    this.close();
+  }
 }

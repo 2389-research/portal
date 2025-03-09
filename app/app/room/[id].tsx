@@ -3,6 +3,13 @@ import { StyleSheet, View, Alert, Clipboard } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Layout, Text, Button, Icon, IconProps, Spinner } from '@ui-kitten/components';
 
+// Define interfaces for the component
+interface MediaDevice {
+  deviceId: string;
+  kind: 'audioinput' | 'videoinput' | 'audiooutput';
+  label: string;
+}
+
 // Import components
 import { VideoGrid } from '../../components/VideoGrid';
 import { ChatInterface } from '../../components/ChatInterface';
@@ -14,7 +21,7 @@ import { ApiProvider } from '../../api';
 import { MediaManager } from '../../services/media';
 import { WebRTCManager } from '../../services/webrtc';
 import { SignalingService } from '../../services/signaling';
-import { ChatManager, ChatMessage } from '../../services/chat';
+import { ChatManager, ChatMessage } from '../../services/chat/index';
 import { createLogger } from '../../services/logger';
 
 export default function RoomScreen() {
@@ -42,15 +49,19 @@ export default function RoomScreen() {
   const [screenShareStream, setScreenShareStream] = useState<MediaStream | null>(null);
 
   // State for device selection
-  const [audioInputDevices, setAudioInputDevices] = useState<any[]>([]);
-  const [videoInputDevices, setVideoInputDevices] = useState<any[]>([]);
-  const [audioOutputDevices, setAudioOutputDevices] = useState<any[]>([]);
+  const [audioInputDevices, setAudioInputDevices] = useState<MediaDevice[]>([]);
+  const [videoInputDevices, setVideoInputDevices] = useState<MediaDevice[]>([]);
+  const [audioOutputDevices, setAudioOutputDevices] = useState<MediaDevice[]>([]);
 
   // State for chat
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [chatReady, setChatReady] = useState(false);
   const [isChatVisible, setIsChatVisible] = useState(false);
   const [_lastChatCheck, setLastChatCheck] = useState(0); // To track periodic checks (currently unused)
+  
+  // State for error handling
+  const [mediaError, setMediaError] = useState<string | null>(null);
+  const [skipMediaAccess, setSkipMediaAccess] = useState(false);
 
   // Service references
   const mediaManager = useRef<MediaManager | null>(null);
@@ -99,6 +110,40 @@ export default function RoomScreen() {
 
     // Set multiple timeouts for different initialization phases
     const timeouts: NodeJS.Timeout[] = [];
+    
+    // Define skipMediaAccess state
+    const [skipMediaAccess, setSkipMediaAccess] = useState(false);
+
+    // Define cleanup function for use in useEffect
+    const cleanup = async () => {
+      try {
+        console.log('[Room] Running cleanup');
+        
+        // Leave the room if we joined
+        if (signalingService.current && roomId) {
+          await signalingService.current.leaveRoom();
+        }
+        
+        // Dispose chat manager
+        if (chatManager.current) {
+          chatManager.current.dispose();
+        }
+        
+        // Stop local stream if it's active
+        if (mediaManager.current && localStream) {
+          mediaManager.current.stopLocalStream(localStream);
+        }
+        
+        // Clear all media state
+        setLocalStream(null);
+        setRemoteStreams(new Map());
+        setScreenShareStream(null);
+        
+        console.log('[Room] Cleanup complete');
+      } catch (error) {
+        console.error('[Room] Error during cleanup:', error);
+      }
+    };
     
     // Master timeout as a safety net (2 minutes total)
     timeouts.push(setTimeout(() => {
@@ -309,10 +354,16 @@ export default function RoomScreen() {
               console.error('[Room] Device enumeration error (continuing):', error);
             });
             
-          } catch (mediaError) {
+          } catch (mediaError: unknown) {
             console.error('[Room] Media access error:', mediaError);
             // Store the error but don't throw it yet
-            setMediaError(mediaError.message || 'Failed to access camera/microphone');
+            const errorMessage = mediaError instanceof Error 
+              ? mediaError.message 
+              : typeof mediaError === 'object' && mediaError !== null && 'message' in mediaError
+                ? (mediaError as { message: string }).message
+                : 'Failed to access camera/microphone';
+                
+            setMediaError(errorMessage);
             // Don't rethrow, we'll continue with signaling
             console.log('[Room] Continuing without media due to error');
             setSkipMediaAccess(true);
@@ -371,7 +422,7 @@ export default function RoomScreen() {
               if (!chatInitialized) {
                 console.warn('[Room] Chat data channel could not be established, but continuing with room');
               }
-            } catch (error) {
+            } catch (error: unknown) {
               console.error('[Room] Error initializing chat (non-fatal):', error);
               // Don't block room usage on chat errors
             } finally {
@@ -385,9 +436,14 @@ export default function RoomScreen() {
         }
         
         console.log('[Room] Room initialization complete, UI now active');
-      } catch (error) {
+      } catch (error: unknown) {
         console.error('[Room] Error initializing room:', error);
-        setError(`Failed to join the room: ${error.message || 'Unknown error'}`);
+        const errorMessage = error instanceof Error 
+          ? error.message 
+          : typeof error === 'object' && error !== null && 'message' in error
+            ? (error as { message: string }).message
+            : 'Unknown error';
+        setError(`Failed to join the room: ${errorMessage}`);
       } finally {
         // Mark loading as complete
         setLoading(false);
@@ -460,7 +516,7 @@ export default function RoomScreen() {
         try {
           hasMediaSupport = await checkMediaSupport();
           console.log('[Room] Media support check result:', hasMediaSupport);
-        } catch (mediaCheckError) {
+        } catch (mediaCheckError: unknown) {
           console.error('[Room] Error checking media support:', mediaCheckError);
           // Assume no support on error
           hasMediaSupport = false;
@@ -475,9 +531,14 @@ export default function RoomScreen() {
         // media and no-media paths
         await initializeRoom();
         
-      } catch (error) {
+      } catch (error: unknown) {
         console.error('[Room] Fatal error in initialization sequence:', error);
-        setError(`Failed to initialize: ${error.message || 'Unknown error'}`);
+        const errorMessage = error instanceof Error 
+          ? error.message 
+          : typeof error === 'object' && error !== null && 'message' in error
+            ? (error as { message: string }).message
+            : 'Unknown error';
+        setError(`Failed to initialize: ${errorMessage}`);
         setLoading(false);
       }
     };
@@ -500,7 +561,7 @@ export default function RoomScreen() {
         }
       })();
     };
-  }, [roomId, initPhase, loading, logger, skipMediaAccess, cleanup]);
+  }, [roomId, initPhase, loading, logger]);
 
   // Setup signaling handlers for WebRTC
   const setupSignalingHandlers = () => {
@@ -587,7 +648,7 @@ export default function RoomScreen() {
       const tryReconnect = async () => {
         console.log('[Room] Attempting to re-establish chat data channel');
         if (chatManager.current) {
-          const ready = await chatManager.current.waitForChannelReady(5000);
+          const ready = await chatManager.current.waitForReady(5000);
           console.log('[Room] Re-established chat data channel result:', ready);
           setChatReady(ready);
           
@@ -789,9 +850,7 @@ export default function RoomScreen() {
   // Render copy icon
   const renderCopyIcon = (props?: IconProps) => <Icon {...props} name="copy-outline" />;
 
-  // State for media error handling
-  const [mediaError, setMediaError] = useState<string | null>(null);
-  const [skipMediaAccess, setSkipMediaAccess] = useState(false);
+  // This state is already defined at the top of the component
 
   // Add a useEffect for periodically checking chat data channel status
   useEffect(() => {
@@ -866,9 +925,10 @@ export default function RoomScreen() {
                   setConnected(true);
                   setLoading(false);
                   setError(null);
-                } catch (err) {
+                } catch (err: unknown) {
                   console.error('[Room] Error in retry initialization:', err);
-                  setError(`Failed to join room: ${err.message}`);
+                  const errorMessage = err instanceof Error ? err.message : 'Unknown error';
+                  setError(`Failed to join room: ${errorMessage}`);
                   setLoading(false);
                 }
               };
@@ -990,7 +1050,7 @@ export default function RoomScreen() {
   return (
     <Layout style={styles.container}>
       <View style={styles.headerContainer}>
-        <Text category="h6">Room: {roomId}</Text>
+        <Text category="h6">Room: {typeof roomId === 'string' ? roomId : String(roomId)}</Text>
         <View style={styles.headerButtons}>
           <Button
             size="small"

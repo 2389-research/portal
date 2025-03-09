@@ -42,29 +42,43 @@ export class MediaManager {
       try {
         this.stream = await navigator.mediaDevices.getUserMedia(options);
         console.log('[Media] Access granted to media devices');
-      } catch (mediaError) {
+      } catch (mediaError: unknown) {
         console.error('[Media] Error accessing media devices:', mediaError);
 
+        // Type guard for error objects
+        const isErrorWithName = (err: unknown): err is { name: string } => 
+          typeof err === 'object' && err !== null && 'name' in err;
+          
+        const isErrorWithMessage = (err: unknown): err is { message: string } => 
+          typeof err === 'object' && err !== null && 'message' in err;
+
         // Try to be more specific about the error
-        if (mediaError.name === 'NotAllowedError' || mediaError.name === 'PermissionDeniedError') {
-          throw new Error('Camera/microphone access denied. Please allow access and try again.');
-        } else if (
-          mediaError.name === 'NotFoundError' ||
-          mediaError.name === 'DevicesNotFoundError'
-        ) {
-          throw new Error('No camera or microphone found. Please connect a device and try again.');
-        } else if (
-          mediaError.name === 'NotReadableError' ||
-          mediaError.name === 'TrackStartError'
-        ) {
-          throw new Error(
-            'Could not access camera/microphone. It may be in use by another application.'
-          );
-        } else {
-          throw new Error(
-            `Media access error: ${mediaError.message || mediaError.name || 'Unknown error'}`
-          );
+        if (isErrorWithName(mediaError)) {
+          if (mediaError.name === 'NotAllowedError' || mediaError.name === 'PermissionDeniedError') {
+            throw new Error('Camera/microphone access denied. Please allow access and try again.');
+          } else if (
+            mediaError.name === 'NotFoundError' ||
+            mediaError.name === 'DevicesNotFoundError'
+          ) {
+            throw new Error('No camera or microphone found. Please connect a device and try again.');
+          } else if (
+            mediaError.name === 'NotReadableError' ||
+            mediaError.name === 'TrackStartError'
+          ) {
+            throw new Error(
+              'Could not access camera/microphone. It may be in use by another application.'
+            );
+          }
         }
+        
+        // Default error message
+        const errorMessage = isErrorWithMessage(mediaError) 
+          ? mediaError.message 
+          : isErrorWithName(mediaError)
+            ? mediaError.name
+            : 'Unknown error';
+            
+        throw new Error(`Media access error: ${errorMessage}`);
       }
 
       // Update current devices
@@ -90,7 +104,7 @@ export class MediaManager {
 
       console.log('[Media] Media initialization complete');
       return this.stream;
-    } catch (error) {
+    } catch (error: unknown) {
       console.error('[Media] Error in media initialization:', error);
       throw error;
     }
@@ -112,7 +126,7 @@ export class MediaManager {
         }));
 
       return this.devices;
-    } catch (error) {
+    } catch (error: unknown) {
       console.error('Error enumerating devices:', error);
       return [];
     }
@@ -171,7 +185,7 @@ export class MediaManager {
 
       this.currentVideoDevice = deviceId;
       return true;
-    } catch (error) {
+    } catch (error: unknown) {
       console.error('Error switching video device:', error);
       return false;
     }
@@ -209,7 +223,7 @@ export class MediaManager {
 
       this.currentAudioDevice = deviceId;
       return true;
-    } catch (error) {
+    } catch (error: unknown) {
       console.error('Error switching audio device:', error);
       return false;
     }
@@ -234,7 +248,7 @@ export class MediaManager {
         console.warn('setSinkId is not supported in this browser');
         return false;
       }
-    } catch (error) {
+    } catch (error: unknown) {
       console.error('Error switching audio output device:', error);
       return false;
     }
@@ -328,13 +342,37 @@ export class MediaManager {
   }
 
   /**
+   * Stop a specific media stream
+   * @param stream - The media stream to stop
+   */
+  public stopLocalStream(stream: MediaStream): void {
+    if (!stream) {
+      console.error('[Media] Cannot stop null stream');
+      return;
+    }
+
+    console.log('[Media] Stopping specific media stream');
+    stream.getTracks().forEach((track) => {
+      console.log(`[Media] Stopping ${track.kind} track: ${track.label || 'unlabeled'}`);
+      track.stop();
+    });
+
+    // If this is the current main stream, reset our state
+    if (stream === this.stream) {
+      this.stream = null;
+      this.videoEnabled = false;
+      this.audioEnabled = false;
+    }
+  }
+
+  /**
    * Request screen sharing stream
    */
   public async getScreenShareStream(): Promise<MediaStream | null> {
     try {
       // @ts-ignore: TypeScript doesn't recognize getDisplayMedia on mediaDevices
       return await navigator.mediaDevices.getDisplayMedia({ video: true });
-    } catch (error) {
+    } catch (error: unknown) {
       console.error('Error getting screen share stream:', error);
       return null;
     }

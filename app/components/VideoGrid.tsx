@@ -52,21 +52,20 @@ export const VideoGrid: React.FC<VideoGridProps> = ({
   const isScreenShareMode = 'isScreenShareMode' in layout && layout.isScreenShareMode;
 
   // Calculate video container dimensions based on grid layout
-  const getContainerStyle = (index: number) => {
+  const getContainerStyle = (index: number): { [key: string]: number | string } => {
     const { columns } = layout;
 
     // In screen share mode, render differently
     if (isScreenShareMode && index === 0 && screenShareStream) {
       return {
         width: '100%',
-        height: undefined,
         aspectRatio: 16 / 9,
         marginBottom: 10,
       };
     }
 
     return {
-      width: `${100 / columns - 2}%`,
+      width: `${Math.floor(100 / columns) - 2}%`,
       marginHorizontal: '1%',
       marginVertical: 5,
     };

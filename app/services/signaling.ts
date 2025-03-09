@@ -48,12 +48,12 @@ export class SignalingService {
       this.startPolling();
 
       return this.userId;
-    } catch (error) {
+    } catch (error: unknown) {
       this.logger.error('Error joining room:', error);
 
       // Provide more specific error information
-      if (error.message) {
-        throw new Error(`Signaling error: ${error.message}`);
+      if (typeof error === 'object' && error !== null && 'message' in error) {
+        throw new Error(`Signaling error: ${(error as { message: string }).message}`);
       } else {
         throw new Error('Failed to join room via signaling service.');
       }
