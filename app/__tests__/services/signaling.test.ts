@@ -26,8 +26,6 @@ class MockApiClient implements ApiInterface {
   private connected: boolean = false;
   private joinedRooms: Set<string> = new Set();
 
-  constructor() {}
-
   async connect(): Promise<void> {
     this.connected = true;
     return Promise.resolve();
@@ -150,6 +148,15 @@ describe('SignalingService', () => {
     // Restore spies
     setIntervalSpy.mockRestore();
     clearIntervalSpy.mockRestore();
+    
+    // Clean up any remaining polling
+    if (signaling) {
+      // Call private leaveRoom to clean up resources
+      signaling.leaveRoom().catch(() => {});
+    }
+    
+    // Clear mocks
+    jest.clearAllMocks();
   });
 
   afterAll(() => {
@@ -270,7 +277,6 @@ describe('SignalingService', () => {
       getSignalsSpy.mockResolvedValueOnce([message1, message2]);
       
       // Manually trigger polling
-      const pollSpy = jest.spyOn(signaling as any, 'pollMessages');
       await (signaling as any).pollMessages();
       
       // Should have updated the lastMessageTime to the highest timestamp

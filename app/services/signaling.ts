@@ -34,6 +34,12 @@ export class SignalingService {
    */
   public async joinRoom(roomId: string): Promise<string> {
     try {
+      // Validate room ID
+      if (!roomId) {
+        this.logger.error('Invalid room ID:', roomId);
+        throw new Error('Room ID is required');
+      }
+      
       this.logger.info('Joining room via API:', roomId);
 
       // Join the room via API
