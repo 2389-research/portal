@@ -92,7 +92,7 @@ describe('FirebaseAuthManager Tests', () => {
 
       // Update our onAuthStateChanged mock to call callback with each state change
       // and track the active listeners
-      const listeners: Function[] = [];
+      const listeners: Array<(user: any) => void> = [];
       firebaseAuth.onAuthStateChanged.mockImplementation((auth, callback) => {
         listeners.push(callback);
         callback(null); // Call with initial null state

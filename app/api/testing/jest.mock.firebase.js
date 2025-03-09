@@ -125,7 +125,7 @@ jest.mock('firebase/firestore', () => {
         } else if (pathParts.length === 4 && pathParts[2] === 'users') {
           // User in room document
           const userId = pathParts[3];
-          if (mockStore.rooms[roomId].users && mockStore.rooms[roomId].users[userId]) {
+          if (mockStore.rooms[roomId].users?.[userId]) {
             mockData = mockStore.rooms[roomId].users[userId];
             exists = true;
           }
