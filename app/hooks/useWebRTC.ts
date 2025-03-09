@@ -144,7 +144,9 @@ export function useWebRTC(localStream: MediaStream | null, options: UseWebRTCOpt
 
       try {
         logger.info('Adding ICE candidate');
-        await webrtcManagerRef.current.addIceCandidate(candidate);
+        // Create a proper RTCIceCandidate object
+        const iceCandidate = new RTCIceCandidate(candidate);
+        await webrtcManagerRef.current.addIceCandidate(iceCandidate);
         return true;
       } catch (error) {
         logger.error('Error adding ICE candidate:', error);
@@ -190,14 +192,17 @@ export function useWebRTC(localStream: MediaStream | null, options: UseWebRTCOpt
 
   // Set data channel handler
   const setOnDataChannel = useCallback(
-    (handler: (event: RTCDataChannelEvent) => void) => {
+    (handler: (channel: RTCDataChannel) => void) => {
       if (!webrtcManagerRef.current) {
         logger.warn('Cannot set data channel handler: WebRTC not initialized');
         return false;
       }
 
       logger.info('Setting data channel handler');
-      webrtcManagerRef.current.setOnDataChannel(handler);
+      // Adapt the handler interface
+      webrtcManagerRef.current.setOnDataChannel((channel) => {
+        handler(channel);
+      });
       return true;
     },
     [logger]

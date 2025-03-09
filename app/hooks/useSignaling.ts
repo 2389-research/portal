@@ -1,13 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { createLogger } from '../services/logger';
-import { SignalingService } from '../services/signaling';
+import { SignalingService, type SignalingMessage as ServiceSignalingMessage } from '../services/signaling';
 
-export type SignalingMessage = {
-  type: string;
-  data: any;
-  sender: string;
-  timestamp: number;
-};
+// Import and use the SignalingMessage type from the service
+export type SignalingMessage = ServiceSignalingMessage;
 
 export type SignalingEventCallback = (message: SignalingMessage) => void;
 
@@ -181,7 +177,7 @@ export function useSignaling(
     }
 
     // Unregister from signaling service
-    signalingServiceRef.current.off(eventType, callback);
+    signalingServiceRef.current.off(eventType);
 
     // Remove from our storage
     eventHandlersRef.current.get(eventType)?.delete(callback);
