@@ -1,36 +1,34 @@
 /**
  * Tests for FirebaseAuthManager class
- * These tests use the Firebase Auth emulator
+ * Using mocked Firebase implementations
  */
 
 import { FirebaseAuthManager } from '../../../api/firebase/FirebaseAuthManager';
-import {
-  FIREBASE_EMULATOR_CONFIG,
-  TEST_USER,
-  createTestUser,
-  initializeFirebaseEmulator,
-  signOutTestUser,
-} from '../../../api/testing/firebase-integration-utils';
+import { FIREBASE_EMULATOR_CONFIG } from '../../../api/testing/firebase-integration-utils';
 
-describe('FirebaseAuthManager Integration Tests', () => {
+// Define mock user data for Firebase Auth
+const MOCK_USER = {
+  uid: 'test-user-id',
+  email: 'test@example.com',
+  displayName: 'Test User',
+  photoURL: null,
+};
+
+// Import Firebase mocks to ensure they're loaded properly
+require('../../../api/testing/jest.mock.firebase.js');
+
+describe('FirebaseAuthManager Tests', () => {
   let authManager: FirebaseAuthManager;
-  let emulatorConfig: any;
-
-  beforeAll(async () => {
-    // Initialize Firebase emulator
-    emulatorConfig = await initializeFirebaseEmulator();
-    console.log('Firebase auth emulator initialized for tests');
-  });
 
   beforeEach(async () => {
+    // Reset mocks
+    jest.clearAllMocks();
+    
     // Create a fresh instance for each test
     authManager = new FirebaseAuthManager(FIREBASE_EMULATOR_CONFIG);
-
+    
     // Connect to Firebase
     await authManager.connect();
-
-    // Ensure user is signed out before each test
-    await signOutTestUser(emulatorConfig.auth);
   });
 
   afterEach(async () => {
@@ -58,25 +56,19 @@ describe('FirebaseAuthManager Integration Tests', () => {
       });
 
       // Sign in
-      await createTestUser(emulatorConfig.auth);
-
-      // Small delay to allow auth state to propagate
-      await new Promise((resolve) => setTimeout(resolve, 500));
+      await authManager.signInWithGoogle();
 
       // Verify auth state changed
       expect(authManager.isSignedIn()).toBe(true);
       expect(authManager.getCurrentUser()).not.toBeNull();
-      expect(authManager.getCurrentUser()?.email).toBe(TEST_USER.email);
+      expect(authManager.getCurrentUser()?.email).toBe(MOCK_USER.email);
 
       // Should use Firebase UID now
       const userId = authManager.getUserId();
-      expect(userId).not.toContain('user_');
+      expect(userId).toBe(MOCK_USER.uid);
 
       // Sign out
-      await signOutTestUser(emulatorConfig.auth);
-
-      // Small delay to allow auth state to propagate
-      await new Promise((resolve) => setTimeout(resolve, 500));
+      await authManager.signOut();
 
       // Verify auth state changed back
       expect(authManager.isSignedIn()).toBe(false);
@@ -86,44 +78,58 @@ describe('FirebaseAuthManager Integration Tests', () => {
       unsubscribe();
 
       // Verify we got both auth states in our listener
-      expect(authChanges.length).toBeGreaterThanOrEqual(1);
+      expect(authChanges.length).toBeGreaterThanOrEqual(2); // Initial null state + sign in
     });
 
     test('should get Firebase user', async () => {
       // Sign in a test user
-      await createTestUser(emulatorConfig.auth);
-
-      // Small delay to allow auth state to propagate
-      await new Promise((resolve) => setTimeout(resolve, 500));
+      await authManager.signInWithGoogle();
 
       // Get the raw Firebase user
       const firebaseUser = authManager.getFirebaseUser();
 
       // Verify the user
       expect(firebaseUser).not.toBeNull();
-      expect(firebaseUser?.email).toBe(TEST_USER.email);
+      expect(firebaseUser?.email).toBe(MOCK_USER.email);
     });
   });
 
   describe('Error Handling', () => {
     test('should handle user mapping with missing fields', async () => {
-      // Create a test user with minimal info
-      await createTestUser(emulatorConfig.auth);
-
-      // Small delay to allow auth state to propagate
-      await new Promise((resolve) => setTimeout(resolve, 500));
-
+      // Get Firebase auth module
+      const firebaseAuth = require('firebase/auth');
+      
+      // Mock user with missing fields
+      const mockUserWithMissingFields = {
+        uid: MOCK_USER.uid,
+        email: MOCK_USER.email,
+        // No displayName or photoURL
+      };
+      
+      // Mock getAuth to return our custom user
+      firebaseAuth.getAuth.mockImplementationOnce(() => ({
+        currentUser: mockUserWithMissingFields,
+        app: { name: 'mock-app' }
+      }));
+      
+      // Create a new manager to get the mock user
+      const newManager = new FirebaseAuthManager(FIREBASE_EMULATOR_CONFIG);
+      await newManager.connect();
+      
+      // Fake a sign-in to ensure the mock user is used
+      await newManager.signInWithGoogle();
+      
       // Get the mapped user
-      const userInfo = authManager.getCurrentUser();
+      const userInfo = newManager.getCurrentUser();
 
       // Verify the user is mapped correctly even with missing fields
       expect(userInfo).not.toBeNull();
       expect(userInfo?.uid).toBeTruthy();
-      expect(userInfo?.email).toBe(TEST_USER.email);
+      expect(userInfo?.email).toBe(MOCK_USER.email);
 
-      // These might be null
-      expect(userInfo).toHaveProperty('displayName');
-      expect(userInfo).toHaveProperty('photoURL');
+      // These should be null or undefined
+      expect(userInfo?.displayName).toBeFalsy();
+      expect(userInfo?.photoURL).toBeFalsy();
     });
 
     test('should throw when not connected', async () => {

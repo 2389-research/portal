@@ -3,6 +3,8 @@
  * This file configures Jest to work with the Firebase emulator
  */
 
+/* eslint-disable no-undef */
+
 // Set environment variables to enable Firebase emulator mode
 process.env.FIRESTORE_EMULATOR_HOST = 'localhost:8080';
 process.env.FIREBASE_AUTH_EMULATOR_HOST = 'localhost:9099';
