@@ -1,4 +1,4 @@
-import { renderHook, act } from '@testing-library/react';
+import { act, renderHook } from '@testing-library/react';
 import { useMedia } from '../../hooks/useMedia';
 import { MediaManager } from '../../services/media';
 
@@ -71,7 +71,7 @@ describe('useMedia hook', () => {
     expect(result.current.videoEnabled).toBeDefined();
     expect(typeof result.current.videoEnabled).toBe('boolean');
   });
-  
+
   it('should expose toggleAudio and toggleVideo functions', () => {
     const { result } = renderHook(() => useMedia({ skipMediaAccess: true }));
     expect(typeof result.current.toggleAudio).toBe('function');
@@ -81,16 +81,16 @@ describe('useMedia hook', () => {
   it('should call onMediaError when media initialization fails', async () => {
     // Setup mock to reject
     mockMediaManager.initialize.mockRejectedValueOnce(new Error('Media access denied'));
-    
+
     const onMediaError = jest.fn();
-    
+
     renderHook(() => useMedia({ onMediaError }));
-    
+
     // Wait for promises to resolve
     await act(async () => {
       await Promise.resolve();
     });
-    
+
     expect(onMediaError).toHaveBeenCalledWith('Media access denied');
   });
 });

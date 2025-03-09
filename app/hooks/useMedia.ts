@@ -1,7 +1,7 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Alert } from 'react-native';
-import { MediaManager } from '../services/media';
 import { createLogger } from '../services/logger';
+import { MediaManager } from '../services/media';
 
 export interface MediaDevice {
   deviceId: string;
@@ -34,10 +34,10 @@ export function useMedia(options: UseMediaOptions = {}) {
   const [audioInputDevices, setAudioInputDevices] = useState<MediaDevice[]>([]);
   const [videoInputDevices, setVideoInputDevices] = useState<MediaDevice[]>([]);
   const [audioOutputDevices, setAudioOutputDevices] = useState<MediaDevice[]>([]);
-  
+
   // Service reference
   const mediaManagerRef = useRef<MediaManager | null>(null);
-  
+
   // Initialize media
   useEffect(() => {
     if (skipMediaAccess) {
@@ -50,17 +50,23 @@ export function useMedia(options: UseMediaOptions = {}) {
         logger.info('Initializing camera and microphone');
         mediaManagerRef.current = new MediaManager();
 
+        // Increase the timeout to 45 seconds for better browser compatibility
+        const MEDIA_TIMEOUT_MS = 45000;
+
         // Initialize media with a promise race to avoid hanging
         const mediaPromise = mediaManagerRef.current.initialize({ video: true, audio: true });
 
         // Create a media timeout promise
         const mediaTimeoutPromise = new Promise((_, reject) => {
           setTimeout(() => {
-            reject(new Error('Media initialization timed out after 20 seconds'));
-          }, 20000);
+            reject(
+              new Error(`Media initialization timed out after ${MEDIA_TIMEOUT_MS / 1000} seconds`)
+            );
+          }, MEDIA_TIMEOUT_MS);
         });
 
         // Race the media initialization against the timeout
+        logger.info(`Waiting up to ${MEDIA_TIMEOUT_MS / 1000} seconds for media initialization...`);
         const stream = (await Promise.race([mediaPromise, mediaTimeoutPromise])) as MediaStream;
 
         // Set local stream as soon as camera is ready
@@ -89,30 +95,53 @@ export function useMedia(options: UseMediaOptions = {}) {
               : 'Failed to access camera/microphone';
 
         setMediaError(errorMessage);
-        
+
         if (onMediaError) {
           onMediaError(errorMessage);
         }
-        
+
         setSkipMediaAccess(true);
       }
     };
 
-    // Check if getUserMedia is supported
+    // Check if getUserMedia is supported and permissions are granted
     const checkMediaSupport = async () => {
       try {
         logger.info('Checking media support...');
         if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-          logger.error('getUserMedia not supported');
+          logger.error('getUserMedia not supported in this browser');
           setSkipMediaAccess(true);
+
+          if (onMediaError) {
+            onMediaError('Camera and microphone access is not supported in this browser');
+          }
+
           return false;
         }
 
         logger.info('Media devices API is available');
 
-        // Quick test of permissions
+        // Try a quick audio-only check to see if we can get any media
         try {
-          logger.info('Requesting permission status...');
+          logger.info('Attempting basic audio-only check...');
+          const audioOnlyStream = await navigator.mediaDevices.getUserMedia({
+            audio: true,
+            video: false,
+          });
+
+          // If we got a stream, release it immediately
+          if (audioOnlyStream) {
+            audioOnlyStream.getTracks().forEach((track) => track.stop());
+            logger.info('Audio-only check successful');
+          }
+        } catch (audioTestErr) {
+          logger.warn('Audio-only test failed:', audioTestErr);
+          // This might indicate permission issues, but we'll continue with the full test
+        }
+
+        // Try using the Permissions API to check permission status if available
+        try {
+          logger.info('Checking permissions API status...');
           if (navigator.permissions?.query) {
             const cameraPermission = await navigator.permissions.query({ name: 'camera' });
             logger.info('Camera permission status:', cameraPermission.state);
@@ -122,22 +151,39 @@ export function useMedia(options: UseMediaOptions = {}) {
 
             // If both permissions are denied, skip media access
             if (cameraPermission.state === 'denied' && micPermission.state === 'denied') {
-              logger.info('Both camera and microphone permissions are denied');
+              logger.warn('Both camera and microphone permissions are denied by the browser');
               setSkipMediaAccess(true);
+
+              if (onMediaError) {
+                onMediaError(
+                  'Camera and microphone access was denied. Please check your browser permissions.'
+                );
+              }
+
               return false;
             }
+
+            // If permissions are prompt, remind the user to allow them
+            if (cameraPermission.state === 'prompt' || micPermission.state === 'prompt') {
+              logger.info('Permission prompts will be shown to the user');
+            }
           } else {
-            logger.info('Permissions API not available');
+            logger.info('Permissions API not available, cannot pre-check permissions');
           }
         } catch (permErr) {
-          logger.info('Error checking permissions:', permErr);
-          // Continue despite permission check error - we'll catch it later
+          logger.info('Error checking permissions API:', permErr);
+          // Continue despite permission check error - we'll handle it during the actual media request
         }
 
         return true;
       } catch (err) {
         logger.error('Error checking media support:', err);
         setSkipMediaAccess(true);
+
+        if (onMediaError) {
+          onMediaError('An error occurred while checking media support');
+        }
+
         return false;
       }
     };
@@ -162,7 +208,7 @@ export function useMedia(options: UseMediaOptions = {}) {
       // Stop screen sharing
       if (screenShareStream) {
         logger.info('Stopping screen share');
-        screenShareStream.getTracks().forEach(track => track.stop());
+        screenShareStream.getTracks().forEach((track) => track.stop());
         setScreenShareStream(null);
         setIsScreenSharing(false);
       }
@@ -195,12 +241,12 @@ export function useMedia(options: UseMediaOptions = {}) {
       // Stop screen sharing
       setIsScreenSharing(false);
       setScreenShareStream(null);
-      
+
       // Stop all tracks
       if (screenShareStream) {
-        screenShareStream.getTracks().forEach(track => track.stop());
+        screenShareStream.getTracks().forEach((track) => track.stop());
       }
-      
+
       return false;
     } else {
       // Start screen sharing
@@ -215,59 +261,58 @@ export function useMedia(options: UseMediaOptions = {}) {
         logger.error('Error sharing screen:', error);
         Alert.alert('Screen Sharing Failed', 'Failed to start screen sharing. Please try again.');
       }
-      
+
       return false;
     }
   }, [isScreenSharing, screenShareStream, logger]);
 
   // Device selection
-  const switchDevices = useCallback(async (
-    audioDevice: string,
-    videoDevice: string,
-    audioOutputDevice: string
-  ) => {
-    if (!mediaManagerRef.current) return false;
+  const switchDevices = useCallback(
+    async (audioDevice: string, videoDevice: string, audioOutputDevice: string) => {
+      if (!mediaManagerRef.current) return false;
 
-    try {
-      // Change audio input device
-      if (audioDevice && audioDevice !== mediaManagerRef.current.getCurrentAudioDevice()) {
-        await mediaManagerRef.current.switchAudioDevice(audioDevice);
-      }
-
-      // Change video input device
-      if (videoDevice && videoDevice !== mediaManagerRef.current.getCurrentVideoDevice()) {
-        await mediaManagerRef.current.switchVideoDevice(videoDevice);
-      }
-
-      // Change audio output device (if supported)
-      if (
-        audioOutputDevice &&
-        audioOutputDevice !== mediaManagerRef.current.getCurrentAudioOutputDevice()
-      ) {
-        // Find all video elements to apply output device change
-        const videoElements = document.querySelectorAll('video');
-        for (const element of videoElements) {
-          await mediaManagerRef.current.switchAudioOutputDevice(audioOutputDevice, element);
+      try {
+        // Change audio input device
+        if (audioDevice && audioDevice !== mediaManagerRef.current.getCurrentAudioDevice()) {
+          await mediaManagerRef.current.switchAudioDevice(audioDevice);
         }
-      }
 
-      // Update local stream reference
-      if (mediaManagerRef.current) {
-        setLocalStream(mediaManagerRef.current.getStream());
+        // Change video input device
+        if (videoDevice && videoDevice !== mediaManagerRef.current.getCurrentVideoDevice()) {
+          await mediaManagerRef.current.switchVideoDevice(videoDevice);
+        }
+
+        // Change audio output device (if supported)
+        if (
+          audioOutputDevice &&
+          audioOutputDevice !== mediaManagerRef.current.getCurrentAudioOutputDevice()
+        ) {
+          // Find all video elements to apply output device change
+          const videoElements = document.querySelectorAll('video');
+          for (const element of videoElements) {
+            await mediaManagerRef.current.switchAudioOutputDevice(audioOutputDevice, element);
+          }
+        }
+
+        // Update local stream reference
+        if (mediaManagerRef.current) {
+          setLocalStream(mediaManagerRef.current.getStream());
+        }
+
+        return true;
+      } catch (error) {
+        logger.error('Error switching devices:', error);
+        return false;
       }
-      
-      return true;
-    } catch (error) {
-      logger.error('Error switching devices:', error);
-      return false;
-    }
-  }, [logger]);
+    },
+    [logger]
+  );
 
   return {
     // Stream states
     localStream,
     screenShareStream,
-    
+
     // Media controls
     audioEnabled,
     videoEnabled,
@@ -275,18 +320,18 @@ export function useMedia(options: UseMediaOptions = {}) {
     toggleAudio,
     toggleVideo,
     toggleScreenShare,
-    
+
     // Device management
     audioInputDevices,
     videoInputDevices,
     audioOutputDevices,
     switchDevices,
-    
+
     // Access control
     skipMediaAccess,
     setSkipMediaAccess,
     mediaError,
-    
+
     // Reference to the manager (for advanced use cases)
     mediaManager: mediaManagerRef.current,
   };

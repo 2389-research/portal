@@ -1,6 +1,6 @@
-import React from 'react';
-import { StyleSheet, View } from 'react-native';
 import { Button, Layout, Text } from '@ui-kitten/components';
+import type React from 'react';
+import { StyleSheet, View } from 'react-native';
 
 interface RoomErrorDisplayProps {
   error: string;
@@ -17,10 +17,11 @@ export const RoomErrorDisplay: React.FC<RoomErrorDisplayProps> = ({
   onGoToLogin,
 }) => {
   // Check if error is auth related
-  const isAuthError = error.includes('sign in') || 
-                      error.includes('authenticate') || 
-                      error.includes('login') ||
-                      error.includes('permission');
+  const isAuthError =
+    error.includes('sign in') ||
+    error.includes('authenticate') ||
+    error.includes('login') ||
+    error.includes('permission');
 
   return (
     <Layout style={styles.errorContainer}>

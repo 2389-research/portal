@@ -1,14 +1,18 @@
-import React, { useState } from 'react';
-import { Alert, Clipboard, StyleSheet, View } from 'react-native';
 import { Button, Icon, type IconProps, Layout, Text } from '@ui-kitten/components';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import React, { useState } from 'react';
+import { Alert, Clipboard, StyleSheet, View } from 'react-native';
 
 import { ChatInterface } from '../../components/ChatInterface';
 import { DeviceSettings } from '../../components/DeviceSettings';
 import { MediaControls } from '../../components/MediaControls';
 import { VideoGrid } from '../../components/VideoGrid';
-import { RoomInitializationStatus, RoomErrorDisplay, NoMediaAccessDisplay } from '../../components/room';
-import { useRoomInitialization, type MediaDevice } from '../../hooks';
+import {
+  NoMediaAccessDisplay,
+  RoomErrorDisplay,
+  RoomInitializationStatus,
+} from '../../components/room';
+import { type MediaDevice, useRoomInitialization } from '../../hooks';
 
 import { createLogger } from '../../services/logger';
 
@@ -16,7 +20,7 @@ export default function RoomScreen() {
   const { id: roomId } = useLocalSearchParams();
   const router = useRouter();
   const logger = createLogger('Room');
-  
+
   // Chat visibility state
   const [isChatVisible, setIsChatVisible] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
@@ -32,7 +36,7 @@ export default function RoomScreen() {
 
   // Render copy icon for clipboard button
   const renderCopyIcon = (props?: IconProps) => <Icon {...props} name="copy-outline" />;
-  
+
   // Render chat toggle icon
   const renderChatIcon = (props?: IconProps) => <Icon {...props} name="message-circle-outline" />;
 
@@ -50,7 +54,7 @@ export default function RoomScreen() {
   // If loading, show initialization status
   if (room.loading) {
     return (
-      <RoomInitializationStatus 
+      <RoomInitializationStatus
         initPhase={room.initPhase}
         onSkipMediaAccess={() => {
           logger.info('User manually skipped media access');
@@ -62,12 +66,7 @@ export default function RoomScreen() {
 
   // If error, show error display
   if (room.error) {
-    return (
-      <RoomErrorDisplay 
-        error={room.error}
-        onGoBack={() => router.replace('/')}
-      />
-    );
+    return <RoomErrorDisplay error={room.error} onGoBack={() => router.replace('/')} />;
   }
 
   return (
@@ -141,7 +140,9 @@ export default function RoomScreen() {
             audioOutputDevices={room.media.audioOutputDevices}
             currentAudioDevice={room.media.mediaManager?.getCurrentAudioDevice() || null}
             currentVideoDevice={room.media.mediaManager?.getCurrentVideoDevice() || null}
-            currentAudioOutputDevice={room.media.mediaManager?.getCurrentAudioOutputDevice() || null}
+            currentAudioOutputDevice={
+              room.media.mediaManager?.getCurrentAudioOutputDevice() || null
+            }
           />
         </>
       )}

@@ -1,12 +1,12 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
-import { Alert } from 'react-native';
 import { useRouter } from 'expo-router';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { Alert } from 'react-native';
 import { createLogger } from '../services/logger';
 import { useAuth } from './useAuth';
-import { useMedia } from './useMedia';
-import { useWebRTC } from './useWebRTC';
-import { useSignaling } from './useSignaling';
 import { useChat } from './useChat';
+import { useMedia } from './useMedia';
+import { useSignaling } from './useSignaling';
+import { useWebRTC } from './useWebRTC';
 
 export type InitPhase = 'auth' | 'media' | 'webrtc' | 'signaling' | 'chat' | 'complete';
 
@@ -18,7 +18,7 @@ interface UseRoomInitializationOptions {
  * Hook to coordinate room initialization process
  */
 export function useRoomInitialization(
-  roomId: string | undefined, 
+  roomId: string | undefined,
   options: UseRoomInitializationOptions = {}
 ) {
   const logger = createLogger('useRoomInit');
@@ -30,7 +30,7 @@ export function useRoomInitialization(
   const [error, setError] = useState<string | null>(null);
   const [skipMediaAccess, setSkipMediaAccess] = useState(initialSkipMedia);
   const [initPhase, setInitPhase] = useState<InitPhase>('auth');
-  
+
   // Store timeouts for cleanup
   const timeoutsRef = useRef<NodeJS.Timeout[]>([]);
 
@@ -48,35 +48,82 @@ export function useRoomInitialization(
     skipMediaAccess,
     onMediaError: (error) => {
       logger.error('Media error:', error);
-      
-      // Show alert for media error
-      Alert.alert(
-        'Media Access Error',
-        `${error}\n\nWould you like to continue without camera/microphone access?`,
-        [
-          {
-            text: 'No, go back',
-            style: 'cancel',
-            onPress: () => router.replace('/'),
-          },
-          {
-            text: 'Yes, continue',
-            onPress: () => {
-              setSkipMediaAccess(true);
-              moveToPhase('signaling');
+
+      // Check for timeout errors specifically
+      if (error.includes('timed out')) {
+        logger.warn('Media initialization timed out, offering to continue without media');
+
+        // Show alert for media timeout error
+        Alert.alert(
+          'Media Access Timeout',
+          `Camera and microphone initialization is taking too long.\n\nWould you like to continue without video and audio?`,
+          [
+            {
+              text: 'No, go back',
+              style: 'cancel',
+              onPress: () => router.replace('/'),
             },
-          },
-        ]
-      );
+            {
+              text: 'Yes, continue without media',
+              onPress: () => {
+                setSkipMediaAccess(true);
+                moveToPhase('signaling');
+              },
+            },
+          ]
+        );
+      } else if (error.includes('denied') || error.includes('permission')) {
+        // Permission errors
+        logger.warn('Media access was denied, offering to continue without media');
+
+        Alert.alert(
+          'Permission Required',
+          `You need to allow camera and microphone access to use video chat.\n\nWould you like to continue in text-only mode?`,
+          [
+            {
+              text: 'No, go back',
+              style: 'cancel',
+              onPress: () => router.replace('/'),
+            },
+            {
+              text: 'Yes, continue without media',
+              onPress: () => {
+                setSkipMediaAccess(true);
+                moveToPhase('signaling');
+              },
+            },
+          ]
+        );
+      } else {
+        // Generic errors
+        Alert.alert(
+          'Media Access Error',
+          `${error}\n\nWould you like to continue without camera/microphone access?`,
+          [
+            {
+              text: 'No, go back',
+              style: 'cancel',
+              onPress: () => router.replace('/'),
+            },
+            {
+              text: 'Yes, continue without media',
+              onPress: () => {
+                setSkipMediaAccess(true);
+                moveToPhase('signaling');
+              },
+            },
+          ]
+        );
+      }
     },
   });
-  
+
   // WebRTC hook (depends on media.localStream)
   const webrtc = useWebRTC(media.localStream, {
     skipWebRTC: skipMediaAccess,
     onWebRTCError: (error) => {
       logger.error('WebRTC error:', error);
-      
+
       // Show alert for WebRTC error
       Alert.alert(
         'WebRTC Setup Error',
@@ -109,7 +156,7 @@ export function useRoomInitialization(
     },
     onUserJoined: (userId) => {
       logger.info('User joined:', userId);
-      
+
       // Create and send WebRTC offer to the new user
       if (webrtc.isInitialized && webrtc.createOffer) {
         (async () => {
@@ -126,7 +173,7 @@ export function useRoomInitialization(
     },
     onUserLeft: (userId) => {
       logger.info('User left:', userId);
-      
+
       // Remove the user from remote streams
       if (webrtc.removePeer) {
         webrtc.removePeer(userId);
@@ -135,30 +182,29 @@ export function useRoomInitialization(
   });
 
   // We need to make sure we only pass webrtcManager when it's initialized
-  const chat = useChat(
-    signaling.userId, 
-    webrtc.isInitialized ? webrtc.webrtcManager : null, 
-    {
-      onChatError: (error) => {
-        logger.warn('Chat error, but continuing:', error);
-        // Non-fatal, just move to completion
-        moveToPhase('complete');
-      },
-    }
-  );
+  const chat = useChat(signaling.userId, webrtc.isInitialized ? webrtc.webrtcManager : null, {
+    onChatError: (error) => {
+      logger.warn('Chat error, but continuing:', error);
+      // Non-fatal, just move to completion
+      moveToPhase('complete');
+    },
+  });
 
   // Move to the next initialization phase
-  const moveToPhase = useCallback((phase: InitPhase) => {
-    logger.info('Moving to phase:', phase);
-    setInitPhase(phase);
-  }, [logger]);
+  const moveToPhase = useCallback(
+    (phase: InitPhase) => {
+      logger.info('Moving to phase:', phase);
+      setInitPhase(phase);
+    },
+    [logger]
+  );
 
   // Setup phase timeouts
   useEffect(() => {
     if (!loading || !roomId) return;
 
     logger.info('Setting up phase timeouts');
-    
+
     // Phase-specific timeouts
     const phaseTimeouts = {
       auth: 30000, // 30 seconds for auth
@@ -341,28 +387,28 @@ export function useRoomInitialization(
     const initializeRoom = async () => {
       try {
         logger.info('Starting room initialization sequence');
-        
+
         // Auth phase - already managed by useAuth hook
         setInitPhase('auth');
-        
+
         // Wait for auth check to complete
         if (!auth.authChecked) {
           logger.info('Waiting for auth check to complete');
           // The auth phase timeout will handle this case
           return;
         }
-        
+
         // Move to next phase once auth is checked
         if (auth.authChecked && initPhase === 'auth') {
           // Move to media phase
           moveToPhase('media');
         }
-        
+
         // Media phase is handled by useMedia hook
         // WebRTC phase is handled by useWebRTC hook
-        
+
         // These phases are progressed by the hooks themselves or through timeouts
-        
+
         // Signaling phase
         if (initPhase === 'signaling') {
           // Join the room if not already connected
@@ -371,7 +417,7 @@ export function useRoomInitialization(
             const newUserId = await signaling.joinRoom(roomId);
             if (newUserId) {
               logger.info('Joined room with user ID:', newUserId);
-              
+
               // Complete signaling phase, move to chat or complete
               if (skipMediaAccess) {
                 logger.info('Media was skipped, completing initialization');
@@ -385,9 +431,9 @@ export function useRoomInitialization(
             }
           }
         }
-        
+
         // Chat phase is handled by useChat hook
-        
+
         // Complete phase
         if (initPhase === 'complete') {
           logger.info('Room initialization complete');
@@ -409,74 +455,99 @@ export function useRoomInitialization(
 
     // Run initialization when phase changes
     initializeRoom();
-    
+
     // Cleanup function
     return () => {
       // Timeouts are cleaned up in their own effect
     };
   }, [
-    roomId, 
-    initPhase, 
-    auth.authChecked, 
-    signaling.connected, 
+    roomId,
+    initPhase,
+    auth.authChecked,
+    signaling.connected,
     skipMediaAccess,
     moveToPhase,
-    signaling, 
-    auth, 
-    logger
+    signaling,
+    auth,
+    logger,
   ]);
 
   // Auto-progress phases when subsystems are ready
   useEffect(() => {
+    // Create a local flag for this render cycle
+    let phaseTransitionScheduled = false;
+
     // Auto-progress from auth to media when auth is checked
-    if (initPhase === 'auth' && auth.authChecked) {
-      moveToPhase('media');
+    if (initPhase === 'auth' && auth.authChecked && !phaseTransitionScheduled) {
+      // Schedule the update for the next tick to break the render cycle
+      phaseTransitionScheduled = true;
+      const timeoutId = setTimeout(() => moveToPhase('media'), 0);
+      timeoutsRef.current.push(timeoutId);
       return;
     }
-    
+
     // Auto-progress from media to webrtc when media is ready or skipped
-    if (initPhase === 'media') {
+    if (initPhase === 'media' && !phaseTransitionScheduled) {
       if (skipMediaAccess) {
-        moveToPhase('signaling');
+        phaseTransitionScheduled = true;
+        const timeoutId = setTimeout(() => moveToPhase('signaling'), 0);
+        timeoutsRef.current.push(timeoutId);
         return;
       }
-      
+
       if (media.localStream) {
-        moveToPhase('webrtc');
+        phaseTransitionScheduled = true;
+        const timeoutId = setTimeout(() => moveToPhase('webrtc'), 0);
+        timeoutsRef.current.push(timeoutId);
         return;
       }
     }
-    
+
     // Auto-progress from webrtc to signaling when webrtc is initialized
-    if (initPhase === 'webrtc' && webrtc.isInitialized) {
-      moveToPhase('signaling');
+    if (initPhase === 'webrtc' && webrtc.isInitialized && !phaseTransitionScheduled) {
+      phaseTransitionScheduled = true;
+      const timeoutId = setTimeout(() => moveToPhase('signaling'), 0);
+      timeoutsRef.current.push(timeoutId);
       return;
     }
-    
+
     // Auto-progress from chat to complete when chat is ready
-    if (initPhase === 'chat' && chat.chatReady) {
-      moveToPhase('complete');
-      setLoading(false);
+    if (initPhase === 'chat' && chat.chatReady && !phaseTransitionScheduled) {
+      phaseTransitionScheduled = true;
+      const timeoutId = setTimeout(() => {
+        moveToPhase('complete');
+        setLoading(false);
+      }, 0);
+      timeoutsRef.current.push(timeoutId);
       return;
     }
-    
+
     // Auto-complete if chat fails but we've already connected to the room
-    if (initPhase === 'chat' && chat.chatError && signaling.connected) {
+    if (
+      initPhase === 'chat' &&
+      chat.chatError &&
+      signaling.connected &&
+      !phaseTransitionScheduled
+    ) {
+      phaseTransitionScheduled = true;
       logger.warn('Chat failed, but proceeding with room initialization');
-      moveToPhase('complete');
-      setLoading(false);
+      const timeoutId = setTimeout(() => {
+        moveToPhase('complete');
+        setLoading(false);
+      }, 0);
+      timeoutsRef.current.push(timeoutId);
     }
   }, [
-    initPhase, 
-    auth.authChecked, 
-    media.localStream, 
-    webrtc.isInitialized, 
+    auth.authChecked,
+    media.localStream,
+    webrtc.isInitialized,
     chat.chatReady,
     chat.chatError,
     signaling.connected,
     skipMediaAccess,
     moveToPhase,
-    logger
+    logger,
+    initPhase,
   ]);
 
   // Handle room exit
@@ -492,17 +563,17 @@ export function useRoomInitialization(
     initPhase,
     skipMediaAccess,
     setSkipMediaAccess,
-    
+
     // Hooks
     auth,
     media,
     webrtc,
     signaling,
     chat,
-    
+
     // Actions
     exitRoom,
-    
+
     // Connection state
     connected: signaling.connected,
   };

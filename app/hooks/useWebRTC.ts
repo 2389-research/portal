@@ -1,6 +1,6 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
-import { WebRTCManager } from '../services/webrtc';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { createLogger } from '../services/logger';
+import { WebRTCManager } from '../services/webrtc';
 
 interface UseWebRTCOptions {
   skipWebRTC?: boolean;
@@ -18,10 +18,10 @@ export function useWebRTC(localStream: MediaStream | null, options: UseWebRTCOpt
   const [remoteStreams, setRemoteStreams] = useState<Map<string, MediaStream>>(new Map());
   const [isInitialized, setIsInitialized] = useState(false);
   const [webrtcError, setWebRTCError] = useState<string | null>(null);
-  
+
   // Service reference
   const webrtcManagerRef = useRef<WebRTCManager | null>(null);
-  
+
   // Initialize WebRTC when local stream is available
   useEffect(() => {
     if (skipWebRTC || !localStream) {
@@ -57,7 +57,7 @@ export function useWebRTC(localStream: MediaStream | null, options: UseWebRTCOpt
               : 'Failed to initialize WebRTC';
 
         setWebRTCError(errorMessage);
-        
+
         if (onWebRTCError) {
           onWebRTCError(errorMessage);
         }
@@ -78,38 +78,44 @@ export function useWebRTC(localStream: MediaStream | null, options: UseWebRTCOpt
   }, [localStream, skipWebRTC, logger, onWebRTCError]);
 
   // Process an incoming WebRTC offer
-  const processOffer = useCallback(async (offer: RTCSessionDescriptionInit) => {
-    if (!webrtcManagerRef.current || !isInitialized) {
-      logger.warn('Cannot process offer: WebRTC not initialized');
-      return null;
-    }
+  const processOffer = useCallback(
+    async (offer: RTCSessionDescriptionInit) => {
+      if (!webrtcManagerRef.current || !isInitialized) {
+        logger.warn('Cannot process offer: WebRTC not initialized');
+        return null;
+      }
 
-    try {
-      logger.info('Processing WebRTC offer');
-      const answer = await webrtcManagerRef.current.processOffer(offer);
-      return answer;
-    } catch (error) {
-      logger.error('Error processing offer:', error);
-      return null;
-    }
-  }, [isInitialized, logger]);
+      try {
+        logger.info('Processing WebRTC offer');
+        const answer = await webrtcManagerRef.current.processOffer(offer);
+        return answer;
+      } catch (error) {
+        logger.error('Error processing offer:', error);
+        return null;
+      }
+    },
+    [isInitialized, logger]
+  );
 
   // Process an incoming WebRTC answer
-  const processAnswer = useCallback(async (answer: RTCSessionDescriptionInit) => {
-    if (!webrtcManagerRef.current || !isInitialized) {
-      logger.warn('Cannot process answer: WebRTC not initialized');
-      return false;
-    }
+  const processAnswer = useCallback(
+    async (answer: RTCSessionDescriptionInit) => {
+      if (!webrtcManagerRef.current || !isInitialized) {
+        logger.warn('Cannot process answer: WebRTC not initialized');
+        return false;
+      }
 
-    try {
-      logger.info('Processing WebRTC answer');
-      await webrtcManagerRef.current.processAnswer(answer);
-      return true;
-    } catch (error) {
-      logger.error('Error processing answer:', error);
-      return false;
-    }
-  }, [isInitialized, logger]);
+      try {
+        logger.info('Processing WebRTC answer');
+        await webrtcManagerRef.current.processAnswer(answer);
+        return true;
+      } catch (error) {
+        logger.error('Error processing answer:', error);
+        return false;
+      }
+    },
+    [isInitialized, logger]
+  );
 
   // Create an offer to establish a connection
   const createOffer = useCallback(async () => {
@@ -129,96 +135,111 @@ export function useWebRTC(localStream: MediaStream | null, options: UseWebRTCOpt
   }, [isInitialized, logger]);
 
   // Add an ICE candidate from a peer
-  const addIceCandidate = useCallback(async (candidate: RTCIceCandidateInit) => {
-    if (!webrtcManagerRef.current || !isInitialized) {
-      logger.warn('Cannot add ICE candidate: WebRTC not initialized');
-      return false;
-    }
+  const addIceCandidate = useCallback(
+    async (candidate: RTCIceCandidateInit) => {
+      if (!webrtcManagerRef.current || !isInitialized) {
+        logger.warn('Cannot add ICE candidate: WebRTC not initialized');
+        return false;
+      }
 
-    try {
-      logger.info('Adding ICE candidate');
-      await webrtcManagerRef.current.addIceCandidate(candidate);
-      return true;
-    } catch (error) {
-      logger.error('Error adding ICE candidate:', error);
-      return false;
-    }
-  }, [isInitialized, logger]);
+      try {
+        logger.info('Adding ICE candidate');
+        await webrtcManagerRef.current.addIceCandidate(candidate);
+        return true;
+      } catch (error) {
+        logger.error('Error adding ICE candidate:', error);
+        return false;
+      }
+    },
+    [isInitialized, logger]
+  );
 
   // Set ice candidate handler
-  const setOnIceCandidate = useCallback((handler: (candidate: RTCIceCandidateInit) => void) => {
-    if (!webrtcManagerRef.current) {
-      logger.warn('Cannot set ICE candidate handler: WebRTC not initialized');
-      return false;
-    }
+  const setOnIceCandidate = useCallback(
+    (handler: (candidate: RTCIceCandidateInit) => void) => {
+      if (!webrtcManagerRef.current) {
+        logger.warn('Cannot set ICE candidate handler: WebRTC not initialized');
+        return false;
+      }
 
-    logger.info('Setting ICE candidate handler');
-    webrtcManagerRef.current.setOnIceCandidate(handler);
-    return true;
-  }, [logger]);
+      logger.info('Setting ICE candidate handler');
+      webrtcManagerRef.current.setOnIceCandidate(handler);
+      return true;
+    },
+    [logger]
+  );
 
   // Create a data channel
-  const createDataChannel = useCallback((label: string) => {
-    if (!webrtcManagerRef.current || !isInitialized) {
-      logger.warn('Cannot create data channel: WebRTC not initialized');
-      return null;
-    }
+  const createDataChannel = useCallback(
+    (label: string) => {
+      if (!webrtcManagerRef.current || !isInitialized) {
+        logger.warn('Cannot create data channel: WebRTC not initialized');
+        return null;
+      }
 
-    try {
-      logger.info('Creating data channel:', label);
-      return webrtcManagerRef.current.createDataChannel(label);
-    } catch (error) {
-      logger.error('Error creating data channel:', error);
-      return null;
-    }
-  }, [isInitialized, logger]);
+      try {
+        logger.info('Creating data channel:', label);
+        return webrtcManagerRef.current.createDataChannel(label);
+      } catch (error) {
+        logger.error('Error creating data channel:', error);
+        return null;
+      }
+    },
+    [isInitialized, logger]
+  );
 
   // Set data channel handler
-  const setOnDataChannel = useCallback((handler: (event: RTCDataChannelEvent) => void) => {
-    if (!webrtcManagerRef.current) {
-      logger.warn('Cannot set data channel handler: WebRTC not initialized');
-      return false;
-    }
+  const setOnDataChannel = useCallback(
+    (handler: (event: RTCDataChannelEvent) => void) => {
+      if (!webrtcManagerRef.current) {
+        logger.warn('Cannot set data channel handler: WebRTC not initialized');
+        return false;
+      }
 
-    logger.info('Setting data channel handler');
-    webrtcManagerRef.current.setOnDataChannel(handler);
-    return true;
-  }, [logger]);
+      logger.info('Setting data channel handler');
+      webrtcManagerRef.current.setOnDataChannel(handler);
+      return true;
+    },
+    [logger]
+  );
 
   // Remove a peer from local streams
-  const removePeer = useCallback((peerId: string) => {
-    setRemoteStreams((prev) => {
-      const newStreams = new Map(prev);
-      if (newStreams.has(peerId)) {
-        newStreams.delete(peerId);
-        logger.info('Removed remote stream for peer:', peerId);
-      }
-      return newStreams;
-    });
-  }, [logger]);
+  const removePeer = useCallback(
+    (peerId: string) => {
+      setRemoteStreams((prev) => {
+        const newStreams = new Map(prev);
+        if (newStreams.has(peerId)) {
+          newStreams.delete(peerId);
+          logger.info('Removed remote stream for peer:', peerId);
+        }
+        return newStreams;
+      });
+    },
+    [logger]
+  );
 
   return {
     // Stream state
     remoteStreams,
-    
+
     // Connection state
     isInitialized,
     webrtcError,
-    
+
     // Connection methods
     processOffer,
     processAnswer,
     createOffer,
     addIceCandidate,
     setOnIceCandidate,
-    
+
     // Data channel methods
     createDataChannel,
     setOnDataChannel,
-    
+
     // Peer management
     removePeer,
-    
+
     // Reference to the manager (for advanced use cases)
     webrtcManager: webrtcManagerRef.current,
   };

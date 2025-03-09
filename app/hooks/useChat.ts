@@ -1,7 +1,7 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { ChatManager, type ChatMessage } from '../services/chat/index';
-import { WebRTCManager } from '../services/webrtc';
 import { createLogger } from '../services/logger';
+import type { WebRTCManager } from '../services/webrtc';
 
 interface UseChatOptions {
   onChatError?: (error: string) => void;
@@ -12,8 +12,8 @@ interface UseChatOptions {
  * Hook to manage chat communication between peers
  */
 export function useChat(
-  userId: string | null, 
-  webrtcManager: WebRTCManager | null, 
+  userId: string | null,
+  webrtcManager: WebRTCManager | null,
   options: UseChatOptions = {}
 ) {
   const logger = createLogger('useChat');
@@ -24,10 +24,10 @@ export function useChat(
   const [chatReady, setChatReady] = useState(false);
   const [lastChatCheck, setLastChatCheck] = useState(0);
   const [chatError, setChatError] = useState<string | null>(null);
-  
+
   // Service reference
   const chatManagerRef = useRef<ChatManager | null>(null);
-  
+
   // Initialize chat when webrtcManager and userId are available
   useEffect(() => {
     if (!userId || !webrtcManager) {
@@ -43,20 +43,20 @@ export function useChat(
 
     const initChat = async () => {
       try {
-        // Ensure webrtcManager is not null and check its state 
+        // Ensure webrtcManager is not null and check its state
         if (!webrtcManager) {
           throw new Error('WebRTC manager is not available');
         }
 
         logger.info('Initializing chat manager');
-        
+
         // Dispose of existing chat manager if any
         if (chatManagerRef.current) {
           logger.info('Disposing previous chat manager');
           chatManagerRef.current.dispose();
           chatManagerRef.current = null;
         }
-        
+
         // Create new chat manager
         chatManagerRef.current = new ChatManager(userId, webrtcManager);
 
@@ -64,7 +64,7 @@ export function useChat(
         logger.info('Attempting to initialize chat data channel');
         const chatInitialized = await chatManagerRef.current.initialize(true);
         logger.info('Chat initialization result:', chatInitialized);
-        
+
         setChatReady(chatInitialized);
 
         if (!chatInitialized) {
@@ -77,9 +77,9 @@ export function useChat(
         // Setup message handler
         chatManagerRef.current.onMessage((message) => {
           logger.info('Received message from:', message.sender);
-          
+
           setChatMessages((prev) => [...prev, message]);
-          
+
           if (onMessageReceived) {
             onMessageReceived(message);
           }
@@ -104,7 +104,7 @@ export function useChat(
     const intervalId = setInterval(() => {
       if (chatManagerRef.current) {
         const isChannelReady = chatManagerRef.current.isReady();
-        
+
         // If UI state doesn't match reality, update it
         if (chatReady !== isChannelReady) {
           logger.info('Chat ready state mismatch detected, updating UI state', {
@@ -113,7 +113,7 @@ export function useChat(
           });
           setChatReady(isChannelReady);
         }
-        
+
         setLastChatCheck(Date.now());
       }
     }, 5000);
@@ -121,86 +121,92 @@ export function useChat(
     // Cleanup on unmount
     return () => {
       clearInterval(intervalId);
-      
+
       if (chatManagerRef.current) {
         logger.info('Disposing chat manager');
         chatManagerRef.current.dispose();
         chatManagerRef.current = null;
       }
-      
+
       setChatMessages([]);
       setChatReady(false);
     };
-  }, [userId, webrtcManager, chatReady, logger, onChatError, onMessageReceived]);
+  }, [userId, webrtcManager, logger, onChatError, onMessageReceived]);
 
   // Send a chat message
-  const sendMessage = useCallback((content: string) => {
-    if (!chatManagerRef.current) {
-      logger.error('Chat manager not initialized in sendMessage');
-      return false;
-    }
-
-    // Double check that data channel is ready
-    if (!chatManagerRef.current.isReady()) {
-      logger.error('Chat channel not ready when attempting to send message');
-      setChatReady(false); // Update UI state to reflect reality
-
-      // Try to re-establish chat data channel
-      const tryReconnect = async () => {
-        logger.info('Attempting to re-establish chat data channel');
-        if (chatManagerRef.current) {
-          const ready = await chatManagerRef.current.waitForReady(5000);
-          logger.info('Re-established chat data channel result:', ready);
-          setChatReady(ready);
-
-          // If reconnected, try sending the message again
-          if (ready) {
-            return chatManagerRef.current.sendMessage(content);
-          }
-        }
+  const sendMessage = useCallback(
+    (content: string) => {
+      if (!chatManagerRef.current) {
+        logger.error('Chat manager not initialized in sendMessage');
         return false;
-      };
+      }
 
-      tryReconnect();
-      return false;
-    }
+      // Double check that data channel is ready
+      if (!chatManagerRef.current.isReady()) {
+        logger.error('Chat channel not ready when attempting to send message');
+        setChatReady(false); // Update UI state to reflect reality
 
-    // If all checks pass, send the message
-    const result = chatManagerRef.current.sendMessage(content);
-    if (!result) {
-      logger.error('Failed to send message, updating chat ready state');
-      setChatReady(false);
-    }
-    
-    return result;
-  }, [logger]);
+        // Try to re-establish chat data channel
+        const tryReconnect = async () => {
+          logger.info('Attempting to re-establish chat data channel');
+          if (chatManagerRef.current) {
+            const ready = await chatManagerRef.current.waitForReady(5000);
+            logger.info('Re-established chat data channel result:', ready);
+            setChatReady(ready);
+
+            // If reconnected, try sending the message again
+            if (ready) {
+              return chatManagerRef.current.sendMessage(content);
+            }
+          }
+          return false;
+        };
+
+        tryReconnect();
+        return false;
+      }
+
+      // If all checks pass, send the message
+      const result = chatManagerRef.current.sendMessage(content);
+      if (!result) {
+        logger.error('Failed to send message, updating chat ready state');
+        setChatReady(false);
+      }
+
+      return result;
+    },
+    [logger]
+  );
 
   // Wait for the chat data channel to be ready
-  const waitForReady = useCallback(async (timeout: number = 5000) => {
-    if (!chatManagerRef.current) {
-      return false;
-    }
-    
-    try {
-      const ready = await chatManagerRef.current.waitForReady(timeout);
-      setChatReady(ready);
-      return ready;
-    } catch (error) {
-      logger.error('Error waiting for chat channel:', error);
-      return false;
-    }
-  }, [logger]);
+  const waitForReady = useCallback(
+    async (timeout = 5000) => {
+      if (!chatManagerRef.current) {
+        return false;
+      }
+
+      try {
+        const ready = await chatManagerRef.current.waitForReady(timeout);
+        setChatReady(ready);
+        return ready;
+      } catch (error) {
+        logger.error('Error waiting for chat channel:', error);
+        return false;
+      }
+    },
+    [logger]
+  );
 
   return {
     // Chat state
     chatMessages,
     chatReady,
     chatError,
-    
+
     // Chat methods
     sendMessage,
     waitForReady,
-    
+
     // Reference to the manager (for advanced use cases)
     chatManager: chatManagerRef.current,
   };

@@ -1,7 +1,7 @@
-import React from 'react';
-import { StyleSheet } from 'react-native';
 import { Button, Layout, Spinner, Text } from '@ui-kitten/components';
-import { type InitPhase } from '../../hooks';
+import type React from 'react';
+import { StyleSheet } from 'react-native';
+import type { InitPhase } from '../../hooks';
 
 interface RoomInitializationStatusProps {
   initPhase: InitPhase;

@@ -1,6 +1,6 @@
-import React from 'react';
-import { StyleSheet, View } from 'react-native';
 import { Text } from '@ui-kitten/components';
+import type React from 'react';
+import { StyleSheet, View } from 'react-native';
 
 /**
  * Component to display when media access is disabled/not available

@@ -33,13 +33,13 @@ export class DataChannelManager {
       try {
         // Create data channel as the initiator
         this.logger.info('Creating data channel as initiator');
-        
+
         // Make sure webrtcManager is properly initialized
         if (!this.webrtcManager) {
           this.logger.error('WebRTC manager is not available');
           return false;
         }
-        
+
         this.dataChannel = this.webrtcManager.createDataChannel('chat');
 
         if (!this.dataChannel) {

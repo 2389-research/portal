@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { ApiProvider } from '../api';
 import { createLogger } from '../services/logger';
 
@@ -90,10 +90,10 @@ export function useAuth(options: UseAuthOptions = {}) {
     userName,
     authChecked,
     authError,
-    
+
     // Auth methods
     checkAuth,
-    
+
     // API client reference
     apiClient: ApiProvider.getInstance().getApiClient(),
   };
