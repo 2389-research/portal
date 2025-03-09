@@ -53,7 +53,8 @@ describe('FirebaseApiClient Integration Tests', () => {
       
       // Then connect again
       await apiClient.connect();
-      expect(apiClient.getDb()).not.toBeNull();
+      // Access the getDb method using type casting
+      expect((apiClient as any).getDb()).not.toBeNull();
       
       // Disconnect
       await apiClient.disconnect();

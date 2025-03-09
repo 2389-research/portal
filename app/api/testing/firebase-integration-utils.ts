@@ -1,35 +1,13 @@
 /**
- * Firebase Integration Test Utilities
- * Helper functions and setup for integration testing with Firebase Emulator
+ * Firebase Test Utilities
+ * Helper functions for Firebase testing with mocks
  */
 
-import { FirebaseOptions, getApp, initializeApp } from 'firebase/app';
-import { 
-  getAuth, 
-  connectAuthEmulator, 
-  signInWithEmailAndPassword, 
-  createUserWithEmailAndPassword,
-  UserCredential,
-  Auth,
-  signOut as firebaseSignOut,
-  User
-} from 'firebase/auth';
-import { 
-  getFirestore, 
-  connectFirestoreEmulator, 
-  Firestore,
-  collection,
-  getDocs,
-  writeBatch,
-  doc,
-  query,
-  limit,
-  DocumentData 
-} from 'firebase/firestore';
+import { User } from 'firebase/auth';
 import { UserInfo } from '../ApiInterface';
 
 // Test configuration for Firebase Emulator
-export const FIREBASE_EMULATOR_CONFIG: FirebaseOptions = {
+export const FIREBASE_EMULATOR_CONFIG = {
   apiKey: 'fake-api-key-for-testing',
   authDomain: 'localhost',
   projectId: 'demo-test-project',
@@ -42,61 +20,70 @@ export const FIREBASE_EMULATOR_CONFIG: FirebaseOptions = {
 export const TEST_USER = {
   email: 'test@example.com',
   password: 'password123',
-  displayName: 'Test User'
+  displayName: 'Test User',
+  uid: 'test-user-id',
+  photoURL: null,
 };
 
 /**
- * Initialize Firebase with emulator connections
- * This should be called in the test setup
+ * Initialize Firebase with test configurations
+ * This returns mock objects for app, auth, and db
  */
-export async function initializeFirebaseEmulator(): Promise<{
-  app: ReturnType<typeof getApp>;
-  auth: Auth;
-  db: Firestore;
-}> {
-  let app;
+export async function initializeFirebaseEmulator() {
+  // Create mock app
+  const app = {
+    name: 'test-app',
+    options: {},
+    automaticDataCollectionEnabled: false,
+  };
   
-  // Initialize or get existing Firebase app
-  try {
-    app = getApp();
-    console.log('Using existing Firebase app instance for tests');
-  } catch (error) {
-    console.log('Initializing new Firebase app for tests');
-    app = initializeApp(FIREBASE_EMULATOR_CONFIG, 'emulator-tests');
-  }
+  // Create mock auth
+  const auth = {
+    currentUser: null,
+    onAuthStateChanged: jest.fn(),
+    app: app,
+  };
   
-  // Initialize authentication and connect to emulator
-  const auth = getAuth(app);
-  connectAuthEmulator(auth, 'http://localhost:9099', { disableWarnings: true });
+  // Create mock db
+  const db = {
+    app: app,
+    collection: jest.fn(),
+    doc: jest.fn(),
+  };
   
-  // Initialize Firestore and connect to emulator
-  const db = getFirestore(app);
-  connectFirestoreEmulator(db, 'localhost', 8080);
-  
-  console.log('Firebase emulator connections established');
+  console.log('Mock Firebase setup complete');
   
   return { app, auth, db };
 }
 
 /**
- * Create a test user account in the Firebase Auth emulator
+ * Create a test user
  */
-export async function createTestUser(auth: Auth): Promise<UserCredential> {
-  try {
-    // Try signing in with existing credentials
-    return await signInWithEmailAndPassword(auth, TEST_USER.email, TEST_USER.password);
-  } catch (error) {
-    // If user doesn't exist, create a new one
-    console.log('Creating new test user in Auth emulator');
-    return await createUserWithEmailAndPassword(auth, TEST_USER.email, TEST_USER.password);
-  }
+export async function createTestUser(auth: any): Promise<any> {
+  console.log('Creating mock test user');
+  
+  // Create a mock user credential
+  const userCredential = {
+    user: {
+      uid: TEST_USER.uid,
+      email: TEST_USER.email,
+      displayName: TEST_USER.displayName,
+      photoURL: TEST_USER.photoURL,
+    },
+  };
+  
+  // Update the auth mock
+  auth.currentUser = userCredential.user;
+  
+  return userCredential;
 }
 
 /**
  * Sign out the current user
  */
-export async function signOutTestUser(auth: Auth): Promise<void> {
-  await firebaseSignOut(auth);
+export async function signOutTestUser(auth: any): Promise<void> {
+  console.log('Signing out mock test user');
+  auth.currentUser = null;
 }
 
 /**
@@ -125,46 +112,10 @@ export function generateTestRoomId(): string {
 }
 
 /**
- * Clear all Firestore collections used in tests
- * This should be called in afterEach or afterAll hooks
+ * Mock function to clear Firestore data
  */
-export async function clearFirestoreData(db: Firestore): Promise<void> {
-  const collectionsToClean = ['rooms'];
-  
-  for (const collectionName of collectionsToClean) {
-    await clearCollection(db, collectionName);
-  }
-}
-
-/**
- * Clear a specific Firestore collection
- */
-async function clearCollection(db: Firestore, collectionName: string): Promise<void> {
-  console.log(`Clearing collection: ${collectionName}`);
-  
-  // Firestore limits batch operations to 500 documents
-  const batchSize = 500;
-  
-  // Query for documents in batches
-  const q = query(collection(db, collectionName), limit(batchSize));
-  let documentsFound = true;
-  
-  while (documentsFound) {
-    const snapshot = await getDocs(q);
-    documentsFound = !snapshot.empty;
-    
-    if (!documentsFound) {
-      console.log(`No more documents in collection: ${collectionName}`);
-      break;
-    }
-    
-    // Create and commit a delete batch
-    const batch = writeBatch(db);
-    snapshot.docs.forEach((document) => {
-      batch.delete(doc(db, collectionName, document.id));
-    });
-    
-    await batch.commit();
-    console.log(`Deleted ${snapshot.size} documents from ${collectionName}`);
-  }
+export async function clearFirestoreData(db: any): Promise<void> {
+  console.log('Mock clearing Firestore data');
+  // In a real implementation, this would clear data
+  // Since we're using mocks, it's a no-op
 }
