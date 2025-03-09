@@ -2,7 +2,7 @@
  * Video grid component for displaying multiple video streams
  */
 
-import React from 'react';
+import type React from 'react';
 import { StyleSheet, View, useWindowDimensions } from 'react-native';
 import { VideoContainer } from './VideoContainer';
 

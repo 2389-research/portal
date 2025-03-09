@@ -3,15 +3,15 @@
  * These tests use the Firebase Firestore emulator
  */
 
+import { collection, doc, getDoc, getDocs } from 'firebase/firestore';
 import { FirebaseSignalingManager } from '../../../api/firebase/FirebaseSignalingManager';
-import { 
-  initializeFirebaseEmulator, 
-  FIREBASE_EMULATOR_CONFIG, 
+import {
+  FIREBASE_EMULATOR_CONFIG,
   clearFirestoreData,
-  generateTestRoomId
+  generateTestRoomId,
+  initializeFirebaseEmulator,
 } from '../../../api/testing/firebase-integration-utils';
-import { SignalingMessage } from '../../../services/signaling';
-import { collection, getDocs, doc, getDoc } from 'firebase/firestore';
+import type { SignalingMessage } from '../../../services/signaling';
 
 describe('FirebaseSignalingManager Integration Tests', () => {
   let signalingManager: FirebaseSignalingManager;
@@ -27,10 +27,10 @@ describe('FirebaseSignalingManager Integration Tests', () => {
   beforeEach(async () => {
     // Create a fresh instance for each test
     signalingManager = new FirebaseSignalingManager(FIREBASE_EMULATOR_CONFIG);
-    
+
     // Connect to Firebase
     await signalingManager.connect();
-    
+
     // Generate a test room ID for each test
     testRoomId = generateTestRoomId();
   });
@@ -40,7 +40,7 @@ describe('FirebaseSignalingManager Integration Tests', () => {
     if (emulatorConfig.db) {
       await clearFirestoreData(emulatorConfig.db);
     }
-    
+
     // Disconnect manager
     await signalingManager.disconnect();
   });
@@ -56,33 +56,35 @@ describe('FirebaseSignalingManager Integration Tests', () => {
         data: { sdp: 'test-sdp-data' },
         timestamp: Date.now(),
       };
-      
+
       // Send the message
       await signalingManager.sendSignal(testRoomId, testMessage);
-      
+
       // Verify message exists in Firestore
       const db = signalingManager.getDb();
       expect(db).not.toBeNull();
-      
+
       if (db) {
         // Query the signals collection
         const signalsSnapshot = await getDocs(collection(db, 'rooms', testRoomId, 'signals'));
-        
+
         // Should have one document
         expect(signalsSnapshot.empty).toBe(false);
         expect(signalsSnapshot.size).toBe(1);
-        
+
         // Verify signal document structure
         const signalData = signalsSnapshot.docs[0].data();
-        expect(signalData).toEqual(expect.objectContaining({
-          type: testMessage.type,
-          sender: testMessage.sender,
-          receiver: testMessage.receiver,
-          roomId: testMessage.roomId,
-          data: testMessage.data,
-          timestamp: testMessage.timestamp,
-          firestoreTimestamp: expect.anything(), // Timestamp object
-        }));
+        expect(signalData).toEqual(
+          expect.objectContaining({
+            type: testMessage.type,
+            sender: testMessage.sender,
+            receiver: testMessage.receiver,
+            roomId: testMessage.roomId,
+            data: testMessage.data,
+            timestamp: testMessage.timestamp,
+            firestoreTimestamp: expect.anything(), // Timestamp object
+          })
+        );
       }
     });
 
@@ -90,8 +92,8 @@ describe('FirebaseSignalingManager Integration Tests', () => {
       // Create timestamps for testing
       const baseTime = Date.now();
       const beforeTime = baseTime - 10000; // 10 seconds before
-      const afterTime = baseTime + 10000;  // 10 seconds after
-      
+      const afterTime = baseTime + 10000; // 10 seconds after
+
       // Create test messages at different times
       const oldMessage: SignalingMessage = {
         type: 'offer',
@@ -101,7 +103,7 @@ describe('FirebaseSignalingManager Integration Tests', () => {
         data: { sdp: 'old-sdp-data' },
         timestamp: beforeTime,
       };
-      
+
       const newMessage: SignalingMessage = {
         type: 'answer',
         sender: 'receiver-456',
@@ -110,20 +112,20 @@ describe('FirebaseSignalingManager Integration Tests', () => {
         data: { sdp: 'new-sdp-data' },
         timestamp: baseTime,
       };
-      
+
       // Send both messages
       await signalingManager.sendSignal(testRoomId, oldMessage);
       await signalingManager.sendSignal(testRoomId, newMessage);
-      
+
       // Get signals after beforeTime - should get both
       const allSignals = await signalingManager.getSignals(testRoomId, beforeTime - 1000);
       expect(allSignals.length).toBe(2);
-      
+
       // Get signals after baseTime - should only get the new message
       const newSignals = await signalingManager.getSignals(testRoomId, beforeTime + 1000);
       expect(newSignals.length).toBe(1);
       expect(newSignals[0].type).toBe('answer');
-      
+
       // Get signals after afterTime - should get none
       const noSignals = await signalingManager.getSignals(testRoomId, afterTime);
       expect(noSignals.length).toBe(0);
@@ -132,7 +134,7 @@ describe('FirebaseSignalingManager Integration Tests', () => {
     test('should handle multiple signal types', async () => {
       // Create various signal types
       const signalTypes = ['offer', 'answer', 'ice-candidate', 'custom-type'];
-      
+
       // Send a message for each type
       for (const type of signalTypes) {
         const message: SignalingMessage = {
@@ -143,18 +145,18 @@ describe('FirebaseSignalingManager Integration Tests', () => {
           data: { type },
           timestamp: Date.now(),
         };
-        
+
         await signalingManager.sendSignal(testRoomId, message);
       }
-      
+
       // Retrieve all signals
       const signals = await signalingManager.getSignals(testRoomId, 0);
-      
+
       // Should have one message for each type
       expect(signals.length).toBe(signalTypes.length);
-      
+
       // Verify all types are present
-      const retrievedTypes = signals.map(s => s.type);
+      const retrievedTypes = signals.map((s) => s.type);
       for (const type of signalTypes) {
         expect(retrievedTypes).toContain(type);
       }
@@ -165,7 +167,7 @@ describe('FirebaseSignalingManager Integration Tests', () => {
     test('should throw when not connected', async () => {
       // Create a new instance without connecting
       const disconnectedManager = new FirebaseSignalingManager(FIREBASE_EMULATOR_CONFIG);
-      
+
       // Create a test message
       const testMessage: SignalingMessage = {
         type: 'offer',
@@ -175,7 +177,7 @@ describe('FirebaseSignalingManager Integration Tests', () => {
         data: { sdp: 'test-sdp-data' },
         timestamp: Date.now(),
       };
-      
+
       // Attempt operations that require connection
       await expect(disconnectedManager.sendSignal(testRoomId, testMessage)).rejects.toThrow();
       await expect(disconnectedManager.getSignals(testRoomId)).rejects.toThrow();

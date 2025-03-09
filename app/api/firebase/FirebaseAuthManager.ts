@@ -3,17 +3,17 @@
  * Handles user authentication operations
  */
 
-import { FirebaseManager } from './FirebaseManager';
-import { UserInfo } from '../ApiInterface';
 import {
-  getAuth,
-  signInWithPopup,
   GoogleAuthProvider,
+  type User,
+  getAuth,
   onAuthStateChanged,
+  signInWithPopup,
   signOut,
-  User,
 } from 'firebase/auth';
 import { createLogger } from '../../services/logger';
+import type { UserInfo } from '../ApiInterface';
+import { FirebaseManager } from './FirebaseManager';
 
 export class FirebaseAuthManager extends FirebaseManager {
   private user: User | null = null;

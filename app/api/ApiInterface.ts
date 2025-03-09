@@ -2,7 +2,7 @@
  * API Interface for WebRTC signaling and room management
  */
 
-import { SignalingMessage } from '../services/signaling';
+import type { SignalingMessage } from '../services/signaling';
 
 export interface RoomResponse {
   roomId: string;

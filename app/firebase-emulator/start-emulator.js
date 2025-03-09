@@ -6,7 +6,8 @@
 const { spawn } = require('child_process');
 const path = require('path');
 
-// Set path to firebase.json
+// Use __dirname to get the directory path
+// eslint-disable-next-line no-undef
 const configPath = path.resolve(__dirname);
 
 // Check if the emulator should be started with UI
@@ -18,8 +19,10 @@ console.log(`UI enabled: ${enableUi}`);
 // Command to start the emulator
 const emulatorArgs = [
   'emulators:start',
-  '--only', 'auth,firestore',
-  '--project', 'demo-test-project',
+  '--only',
+  'auth,firestore',
+  '--project',
+  'demo-test-project',
 ];
 
 // If UI is not enabled, add the --no-ui flag

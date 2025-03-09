@@ -3,18 +3,18 @@
  * Helper functions for testing Firebase functionality
  */
 
-import { FirebaseApp } from 'firebase/app';
-import { User } from 'firebase/auth';
-import { Firestore } from 'firebase/firestore';
-import { FirebaseApiClient } from '../FirebaseApiClient';
-import { ApiInterface, UserInfo } from '../ApiInterface';
+import type { FirebaseApp } from 'firebase/app';
+import type { User } from 'firebase/auth';
+import type { Firestore } from 'firebase/firestore';
+import type { ApiInterface, UserInfo } from '../ApiInterface';
+import type { FirebaseApiClient } from '../FirebaseApiClient';
 
 /**
  * Mock FirebaseApiClient for testing
  * Implements the same interface but allows mocking of all methods
  */
 export class MockFirebaseApiClient implements ApiInterface {
-  private connected: boolean = false;
+  private connected = false;
   private mockUser: UserInfo | null = null;
 
   public async connect(): Promise<void> {
@@ -48,7 +48,7 @@ export class MockFirebaseApiClient implements ApiInterface {
 
   public async sendSignal(roomId: string, message: any): Promise<void> {}
 
-  public async getSignals(roomId: string, since: number = 0): Promise<any[]> {
+  public async getSignals(roomId: string, since = 0): Promise<any[]> {
     return [];
   }
 

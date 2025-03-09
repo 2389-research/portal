@@ -3,7 +3,7 @@
  * Adapts signaling to work with Expo
  */
 
-import { ApiInterface } from '../api/ApiInterface';
+import type { ApiInterface } from '../api/ApiInterface';
 import { createLogger } from './logger';
 
 export interface SignalingMessage {

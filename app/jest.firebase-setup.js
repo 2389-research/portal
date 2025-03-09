@@ -50,10 +50,12 @@ jest.mock('firebase/firestore', () => ({
   getDocs: jest.fn(() => ({
     empty: false,
     size: 1,
-    docs: [{
-      id: 'test-doc',
-      data: () => ({}),
-    }],
+    docs: [
+      {
+        id: 'test-doc',
+        data: () => ({}),
+      },
+    ],
     forEach: jest.fn(),
   })),
   query: jest.fn(),
@@ -67,12 +69,12 @@ jest.mock('firebase/firestore', () => ({
       toDate: () => new Date(millis),
       _milliseconds: millis,
       // Add these to make comparisons and serialization work
-      isEqual: function(other) {
+      isEqual: function (other) {
         return other && other._milliseconds === this._milliseconds;
       },
-      toString: function() {
+      toString: function () {
         return `Timestamp(seconds=${Math.floor(this._milliseconds / 1000)}, nanoseconds=${(this._milliseconds % 1000) * 1000000})`;
-      }
+      },
     })),
   },
   writeBatch: jest.fn(() => ({
@@ -87,5 +89,12 @@ global.console.info = jest.fn();
 global.console.debug = jest.fn();
 
 // Don't silence errors and warnings
-// global.console.warn = jest.fn(); 
+// global.console.warn = jest.fn();
 // global.console.error = jest.fn();
+
+// Export the mocks for use in tests if needed
+module.exports = {
+  firebaseAppMock: require('firebase/app'),
+  firebaseAuthMock: require('firebase/auth'),
+  firebaseFirestoreMock: require('firebase/firestore'),
+};

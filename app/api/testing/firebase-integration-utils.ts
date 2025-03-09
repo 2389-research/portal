@@ -3,8 +3,8 @@
  * Helper functions for Firebase testing with mocks
  */
 
-import { User } from 'firebase/auth';
-import { UserInfo } from '../ApiInterface';
+import type { User } from 'firebase/auth';
+import type { UserInfo } from '../ApiInterface';
 
 // Test configuration for Firebase Emulator
 export const FIREBASE_EMULATOR_CONFIG = {
@@ -36,23 +36,23 @@ export async function initializeFirebaseEmulator() {
     options: {},
     automaticDataCollectionEnabled: false,
   };
-  
+
   // Create mock auth
   const auth = {
     currentUser: null,
     onAuthStateChanged: jest.fn(),
     app: app,
   };
-  
+
   // Create mock db
   const db = {
     app: app,
     collection: jest.fn(),
     doc: jest.fn(),
   };
-  
+
   console.log('Mock Firebase setup complete');
-  
+
   return { app, auth, db };
 }
 
@@ -61,7 +61,7 @@ export async function initializeFirebaseEmulator() {
  */
 export async function createTestUser(auth: any): Promise<any> {
   console.log('Creating mock test user');
-  
+
   // Create a mock user credential
   const userCredential = {
     user: {
@@ -71,10 +71,10 @@ export async function createTestUser(auth: any): Promise<any> {
       photoURL: TEST_USER.photoURL,
     },
   };
-  
+
   // Update the auth mock
   auth.currentUser = userCredential.user;
-  
+
   return userCredential;
 }
 

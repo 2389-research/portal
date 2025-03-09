@@ -3,13 +3,13 @@
  * Uses specialized managers for different concerns
  */
 
-import { FirebaseOptions } from 'firebase/app';
-import { ApiInterface, RoomResponse, JoinRoomResponse, UserInfo } from '../ApiInterface';
-import { SignalingMessage } from '../../services/signaling';
+import type { FirebaseOptions } from 'firebase/app';
+import { createLogger } from '../../services/logger';
+import type { SignalingMessage } from '../../services/signaling';
+import type { ApiInterface, JoinRoomResponse, RoomResponse, UserInfo } from '../ApiInterface';
 import { FirebaseAuthManager } from './FirebaseAuthManager';
 import { FirebaseRoomManager } from './FirebaseRoomManager';
 import { FirebaseSignalingManager } from './FirebaseSignalingManager';
-import { createLogger } from '../../services/logger';
 
 export class FirebaseApiClient implements ApiInterface {
   private authManager: FirebaseAuthManager;
@@ -112,7 +112,7 @@ export class FirebaseApiClient implements ApiInterface {
   /**
    * Get signaling messages
    */
-  public async getSignals(roomId: string, since: number = 0): Promise<SignalingMessage[]> {
+  public async getSignals(roomId: string, since = 0): Promise<SignalingMessage[]> {
     try {
       return await this.signalingManager.getSignals(roomId, since);
     } catch (error) {

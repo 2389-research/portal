@@ -24,7 +24,7 @@ describe('FirebaseManager Tests', () => {
   beforeEach(() => {
     // Reset mocks
     jest.clearAllMocks();
-    
+
     // Create a fresh instance for each test
     firebaseManager = new FirebaseManager(FIREBASE_EMULATOR_CONFIG);
   });
@@ -38,11 +38,11 @@ describe('FirebaseManager Tests', () => {
     test('should connect to Firebase successfully', async () => {
       // Connect to Firebase
       await firebaseManager.connect();
-      
+
       // Verify app and db are initialized
       expect(firebaseManager.getApp()).not.toBeNull();
       expect(firebaseManager.getDb()).not.toBeNull();
-      
+
       // Verify Firebase functions were called
       expect(require('firebase/app').initializeApp).toHaveBeenCalled();
       expect(require('firebase/firestore').getFirestore).toHaveBeenCalled();
@@ -52,10 +52,10 @@ describe('FirebaseManager Tests', () => {
       // Connect first
       await firebaseManager.connect();
       expect(firebaseManager.getDb()).not.toBeNull();
-      
+
       // Then disconnect
       await firebaseManager.disconnect();
-      
+
       // Db reference should be null after disconnect
       expect(firebaseManager.getDb()).toBeNull();
     });
@@ -63,20 +63,22 @@ describe('FirebaseManager Tests', () => {
     test('should try to reuse existing Firebase app', async () => {
       // Mock getApp to return an app on second call
       const getAppMock = require('firebase/app').getApp;
-      getAppMock.mockImplementationOnce(() => {
-        throw new Error('No app found');
-      }).mockImplementationOnce(() => ({ name: 'existing-app' }));
-      
+      getAppMock
+        .mockImplementationOnce(() => {
+          throw new Error('No app found');
+        })
+        .mockImplementationOnce(() => ({ name: 'existing-app' }));
+
       // Connect the first time - should use initializeApp
       await firebaseManager.connect();
       expect(require('firebase/app').initializeApp).toHaveBeenCalled();
-      
+
       // Disconnect
       await firebaseManager.disconnect();
-      
+
       // Reset the mock count to verify next call
       jest.clearAllMocks();
-      
+
       // Connect again - should try to use getApp
       await firebaseManager.connect();
       expect(require('firebase/app').getApp).toHaveBeenCalled();
@@ -87,30 +89,30 @@ describe('FirebaseManager Tests', () => {
     test('should generate random IDs with prefix', () => {
       // Access protected method through type assertion
       const generateRandomId = (firebaseManager as any).generateRandomId.bind(firebaseManager);
-      
+
       // Generate IDs with different prefixes
       const userIdA = generateRandomId('user');
       const userIdB = generateRandomId('user');
       const roomId = generateRandomId('room');
-      
+
       // Verify format
       expect(userIdA).toMatch(/^user_[a-zA-Z0-9]{12}$/);
       expect(userIdB).toMatch(/^user_[a-zA-Z0-9]{12}$/);
       expect(roomId).toMatch(/^room_[a-zA-Z0-9]{12}$/);
-      
+
       // Verify uniqueness
       expect(userIdA).not.toEqual(userIdB);
       expect(userIdA).not.toEqual(roomId);
     });
-    
+
     test('should generate IDs with custom length', () => {
       // Access protected method through type assertion
       const generateRandomId = (firebaseManager as any).generateRandomId.bind(firebaseManager);
-      
+
       // Generate IDs with different lengths
       const shortId = generateRandomId('test', 6);
       const longId = generateRandomId('test', 20);
-      
+
       // Verify format and length
       expect(shortId).toMatch(/^test_[a-zA-Z0-9]{6}$/);
       expect(longId).toMatch(/^test_[a-zA-Z0-9]{20}$/);
@@ -124,10 +126,9 @@ describe('FirebaseManager Tests', () => {
       initializeAppMock.mockImplementationOnce(() => {
         throw new Error('Firebase initialization error');
       });
-      
+
       // Attempt to connect
-      await expect(firebaseManager.connect())
-        .rejects.toThrow(); // Any error is acceptable here
+      await expect(firebaseManager.connect()).rejects.toThrow(); // Any error is acceptable here
     });
   });
 });
