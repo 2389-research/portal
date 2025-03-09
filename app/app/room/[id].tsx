@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { StyleSheet, View, Alert, Clipboard } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Layout, Text, Button, Icon, IconProps, Spinner } from '@ui-kitten/components';
@@ -28,7 +28,6 @@ export default function RoomScreen() {
   const { id: roomId } = useLocalSearchParams();
   const router = useRouter();
   const logger = createLogger('Room');
-
   // State for managing room
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -111,8 +110,8 @@ export default function RoomScreen() {
     // Set multiple timeouts for different initialization phases
     const timeouts: NodeJS.Timeout[] = [];
 
-    // Define cleanup function for use in useEffect
-    const cleanup = async () => {
+    // Define the cleanup function wrapper for the useEffect
+    async function cleanupResources() {
       try {
         console.log('[Room] Running cleanup');
         
@@ -140,7 +139,7 @@ export default function RoomScreen() {
       } catch (error) {
         console.error('[Room] Error during cleanup:', error);
       }
-    };
+    }
     
     // Master timeout as a safety net (2 minutes total)
     timeouts.push(setTimeout(() => {
@@ -552,13 +551,13 @@ export default function RoomScreen() {
       // Use an immediately invoked async function to ensure cleanup completes
       (async () => {
         try {
-          await cleanup();
+          await cleanupResources();
         } catch (error) {
           console.error('[Room] Error during cleanup on unmount:', error);
         }
       })();
     };
-  }, [roomId, initPhase, loading, logger, localStream, skipMediaAccess, cleanup]);
+  }, [roomId, initPhase, loading, logger, localStream, skipMediaAccess]);
 
   // Setup signaling handlers for WebRTC
   const setupSignalingHandlers = () => {
@@ -755,12 +754,7 @@ export default function RoomScreen() {
 
   // Handle room leave
   const handleLeaveRoom = async () => {
-    await cleanup();
-    router.replace('/');
-  };
-
-  // Cleanup resources - wrapped in useCallback to avoid dependency issues
-  const cleanup = useCallback(async () => {
+    // Cleanup logic
     console.log('[Room] Starting cleanup...');
     
     // Reset states first to avoid any component updates during cleanup
@@ -828,17 +822,10 @@ export default function RoomScreen() {
     setUserId(null);
     
     console.log('[Room] Cleanup complete');
-  }, [
-    setRemoteStreams, 
-    setChatMessages, 
-    setChatReady, 
-    setLocalStream, 
-    setScreenShareStream, 
-    setUserId,
-    screenShareStream
-    // localStream is read but not a required dependency since we just need to know if it exists
-    // and we're not using its value directly
-  ]);
+    
+    // Navigate back
+    router.replace('/');
+  };
 
   // Copy room ID to clipboard
   const copyRoomId = () => {
