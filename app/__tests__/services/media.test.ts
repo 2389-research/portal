@@ -618,8 +618,7 @@ describe('MediaManager', () => {
       expect(mockAudioElement.setSinkId?.mock.calls[0][0]).toBe('output1');
 
       // Test with unsupported browser (remove setSinkId)
--      delete mockAudioElement.setSinkId;
-+      mockAudioElement.setSinkId = undefined;
+      mockAudioElement.setSinkId = undefined;
       const result2 = await mediaManager.switchAudioOutputDevice(
         'output1',
         mockAudioElement as unknown as HTMLMediaElement
