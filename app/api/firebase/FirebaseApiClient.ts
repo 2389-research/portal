@@ -139,6 +139,18 @@ export class FirebaseApiClient implements ApiInterface {
       throw error;
     }
   }
+  
+  /**
+   * Sign in anonymously with a specific UUID
+   */
+  public async signInAnonymously(uuid?: string, displayName?: string): Promise<UserInfo> {
+    try {
+      return await this.authManager.signInAnonymously(uuid, displayName);
+    } catch (error) {
+      this.logger.error('Error signing in anonymously:', error);
+      throw error;
+    }
+  }
 
   /**
    * Sign out

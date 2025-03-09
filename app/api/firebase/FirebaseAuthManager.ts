@@ -12,6 +12,7 @@ import {
   onAuthStateChanged,
   signOut,
   User,
+  signInAnonymously,
 } from 'firebase/auth';
 import { createLogger } from '../../services/logger';
 
@@ -81,6 +82,41 @@ export class FirebaseAuthManager extends FirebaseManager {
       return this.mapUserToUserInfo(result.user);
     } catch (error) {
       this.logger.error('Error signing in with Google:', error);
+      throw error;
+    }
+  }
+  
+  /**
+   * Sign in anonymously with a specific UUID
+   * @param uuid User UUID to use for anonymous authentication
+   * @param displayName Optional display name for the user
+   */
+  public async signInAnonymously(uuid?: string, displayName?: string): Promise<UserInfo> {
+    if (!this.getApp()) throw new Error('Not connected to Firebase');
+
+    try {
+      const auth = getAuth(this.getApp()!);
+      
+      // If we have a current anonymous user and uuid doesn't match, sign out first
+      if (this.user && this.user.isAnonymous && uuid && this.user.uid !== uuid) {
+        await signOut(auth);
+      }
+      
+      // If we're already signed in as the requested uuid, return current user
+      if (this.user && this.user.isAnonymous && uuid && this.user.uid === uuid) {
+        return this.mapUserToUserInfo(this.user, displayName);
+      }
+      
+      // Sign in anonymously
+      const result = await signInAnonymously(auth);
+      this.user = result.user;
+      
+      // Note: We can't set the UID for anonymous users, so we'll handle this at the application level
+      // by keeping track of the mapping between the generated Firebase UID and our desired UUID
+      
+      return this.mapUserToUserInfo(this.user, displayName);
+    } catch (error) {
+      this.logger.error('Error signing in anonymously:', error);
       throw error;
     }
   }
@@ -161,11 +197,13 @@ export class FirebaseAuthManager extends FirebaseManager {
 
   /**
    * Map Firebase User to UserInfo interface
+   * @param user Firebase User object
+   * @param overrideDisplayName Optional display name to override the user's display name
    */
-  private mapUserToUserInfo(user: User): UserInfo {
+  private mapUserToUserInfo(user: User, overrideDisplayName?: string): UserInfo {
     return {
       uid: user.uid,
-      displayName: user.displayName,
+      displayName: overrideDisplayName || user.displayName,
       email: user.email,
       photoURL: user.photoURL,
     };

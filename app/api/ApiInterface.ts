@@ -68,6 +68,12 @@ export interface ApiInterface {
    * Returns null if not supported by the provider
    */
   signInWithGoogle?(): Promise<UserInfo>;
+  
+  /**
+   * Sign in anonymously with an optional UUID and display name (Firebase only)
+   * Returns null if not supported by the provider
+   */
+  signInAnonymously?(uuid?: string, displayName?: string): Promise<UserInfo>;
 
   /**
    * Sign out (Firebase only)
