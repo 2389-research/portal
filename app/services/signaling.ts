@@ -13,6 +13,7 @@ export interface SignalingMessage {
   roomId: string;
   data: any;
   timestamp?: number; // Add timestamp property
+  connectionId?: string; // Unique ID to group related WebRTC signaling messages
 }
 
 export class SignalingService {
@@ -93,7 +94,8 @@ export class SignalingService {
     data: any,
     receiver?: string,
     forceRoomId?: string,
-    forceSenderId?: string
+    forceSenderId?: string,
+    extraFields?: Record<string, any>
   ): Promise<void> {
     // Allow force sending with specific room and user IDs (used when leaving a room)
     const roomId = forceRoomId || this.roomId;
@@ -114,6 +116,19 @@ export class SignalingService {
 
     if (receiver) {
       message.receiver = receiver;
+    }
+    
+    // Add any extra fields to the message (like connectionId)
+    if (extraFields) {
+      Object.entries(extraFields).forEach(([key, value]) => {
+        // @ts-ignore: We're intentionally adding dynamic properties from extraFields
+        message[key] = value;
+      });
+      
+      // Log if there's a connection ID (useful for WebRTC debugging)
+      if (extraFields.connectionId) {
+        this.logger.info(`Sending message with connection ID: ${extraFields.connectionId}`);
+      }
     }
 
     try {

@@ -14,10 +14,11 @@ export class WebRTCManager {
   private remoteStreams: Map<string, MediaStream> = new Map();
   private dataChannel: RTCDataChannel | null = null;
   private peerConfig: PeerConfig;
-  private onIceCandidateCallback: ((candidate: RTCIceCandidate) => void) | null = null;
+  private onIceCandidateCallback: ((candidate: RTCIceCandidate, connectionId: string) => void) | null = null;
   private onNegotiationNeededCallback: (() => void) | null = null;
   private onTrackCallback: ((stream: MediaStream, peerId: string) => void) | null = null;
   private onDataChannelCallback: ((channel: RTCDataChannel) => void) | null = null;
+  private currentConnectionId: string | null = null;
   private logger = createLogger('WebRTC');
 
   constructor(config?: Partial<PeerConfig>) {
@@ -59,10 +60,16 @@ export class WebRTCManager {
       });
     }
 
+    // Generate a new connection ID if we don't have one
+    if (!this.currentConnectionId) {
+      this.currentConnectionId = this.generateConnectionId();
+      this.logger.info('Generated new connection ID:', this.currentConnectionId);
+    }
+
     // Set up event handlers
     this.peerConnection.onicecandidate = (event) => {
-      if (event.candidate && this.onIceCandidateCallback) {
-        this.onIceCandidateCallback(event.candidate);
+      if (event.candidate && this.onIceCandidateCallback && this.currentConnectionId) {
+        this.onIceCandidateCallback(event.candidate, this.currentConnectionId);
       }
     };
 
@@ -148,36 +155,70 @@ export class WebRTCManager {
   /**
    * Create and send an offer to a remote peer
    */
-  public async createOffer(): Promise<RTCSessionDescriptionInit> {
+  public async createOffer(): Promise<{ offer: RTCSessionDescriptionInit; connectionId: string }> {
     if (!this.peerConnection) {
       throw new Error('Peer connection not initialized');
     }
 
+    // Generate a new connection ID for this offer
+    this.currentConnectionId = this.generateConnectionId();
+    this.logger.info('Generated new connection ID for offer:', this.currentConnectionId);
+
     const offer = await this.peerConnection.createOffer();
     await this.peerConnection.setLocalDescription(offer);
-    return offer;
+    
+    return { 
+      offer: offer, 
+      connectionId: this.currentConnectionId 
+    };
+  }
+  
+  /**
+   * Generate a unique connection ID for WebRTC signaling
+   */
+  private generateConnectionId(): string {
+    // Generate a random string to use as connection ID
+    return Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
   }
 
   /**
    * Process an offer received from a remote peer
    */
-  public async processOffer(offer: RTCSessionDescriptionInit): Promise<RTCSessionDescriptionInit> {
+  public async processOffer(offer: RTCSessionDescriptionInit, connectionId: string): Promise<{ answer: RTCSessionDescriptionInit; connectionId: string }> {
     if (!this.peerConnection) {
       throw new Error('Peer connection not initialized');
     }
 
+    // Store the connection ID from the offer
+    this.currentConnectionId = connectionId;
+    this.logger.info('Using connection ID from offer:', connectionId);
+
     await this.peerConnection.setRemoteDescription(new RTCSessionDescription(offer));
     const answer = await this.peerConnection.createAnswer();
     await this.peerConnection.setLocalDescription(answer);
-    return answer;
+    
+    return {
+      answer: answer,
+      connectionId: connectionId
+    };
   }
 
   /**
    * Process an answer received from a remote peer
    */
-  public async processAnswer(answer: RTCSessionDescriptionInit): Promise<void> {
+  public async processAnswer(answer: RTCSessionDescriptionInit, connectionId: string): Promise<void> {
     if (!this.peerConnection) {
       throw new Error('Peer connection not initialized');
+    }
+
+    // Verify the connection ID matches the current connection
+    if (this.currentConnectionId !== connectionId) {
+      this.logger.warn(
+        `Connection ID mismatch. Expected: ${this.currentConnectionId}, Received: ${connectionId}`
+      );
+      // Still proceed with the answer since it might be a valid connection
+    } else {
+      this.logger.info('Processing answer with matching connection ID:', connectionId);
     }
 
     await this.peerConnection.setRemoteDescription(new RTCSessionDescription(answer));
@@ -186,9 +227,20 @@ export class WebRTCManager {
   /**
    * Add a remote ICE candidate
    */
-  public async addIceCandidate(candidate: RTCIceCandidate): Promise<void> {
+  public async addIceCandidate(candidate: RTCIceCandidate, connectionId: string): Promise<void> {
     if (!this.peerConnection) {
       throw new Error('Peer connection not initialized');
+    }
+
+    // Verify the connection ID matches the current connection
+    if (this.currentConnectionId !== connectionId) {
+      this.logger.warn(
+        `ICE candidate connection ID mismatch. Expected: ${this.currentConnectionId}, Received: ${connectionId}`
+      );
+      // If the connection ID doesn't match, we might want to skip this candidate
+      // but for backward compatibility we'll still add it
+    } else {
+      this.logger.info('Adding ICE candidate with matching connection ID:', connectionId);
     }
 
     await this.peerConnection.addIceCandidate(candidate);
@@ -229,8 +281,15 @@ export class WebRTCManager {
   /**
    * Set callbacks
    */
-  public setOnIceCandidate(callback: (candidate: RTCIceCandidate) => void): void {
+  public setOnIceCandidate(callback: (candidate: RTCIceCandidate, connectionId: string) => void): void {
     this.onIceCandidateCallback = callback;
+  }
+  
+  /**
+   * Get the current connection ID
+   */
+  public getCurrentConnectionId(): string | null {
+    return this.currentConnectionId;
   }
 
   public setOnNegotiationNeeded(callback: () => void): void {
