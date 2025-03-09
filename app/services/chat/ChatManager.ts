@@ -25,7 +25,7 @@ export class ChatManager {
   constructor(userId: string, webrtcManager: WebRTCManager) {
     this.userId = userId;
     this.dataChannelManager = new DataChannelManager(webrtcManager);
-    
+
     // Set up the data channel message handler
     this.dataChannelManager.onMessage((message) => {
       this.handleIncomingMessage(message);
@@ -45,7 +45,7 @@ export class ChatManager {
    */
   private handleIncomingMessage(message: DataChannelMessage): void {
     this.logger.info('Received chat message from:', message.sender);
-    
+
     const chatMessage: ChatMessage = {
       id: message.id,
       sender: message.sender,
@@ -71,8 +71,11 @@ export class ChatManager {
       return null;
     }
 
-    this.logger.info('Sending chat message:', content.substring(0, 20) + (content.length > 20 ? '...' : ''));
-    
+    this.logger.info(
+      'Sending chat message:',
+      content.substring(0, 20) + (content.length > 20 ? '...' : '')
+    );
+
     const messageId = this.generateId();
     const timestamp = Date.now();
 
@@ -85,14 +88,14 @@ export class ChatManager {
 
     // Try to send the message
     const sent = this.dataChannelManager.send(message);
-    
+
     if (sent) {
       // Create a chat message and add it to our local list
       const chatMessage: ChatMessage = {
         ...message,
         isLocal: true,
       };
-      
+
       this.messages.push(chatMessage);
 
       if (this.onMessageCallback) {
@@ -101,7 +104,7 @@ export class ChatManager {
 
       return chatMessage;
     }
-    
+
     return null;
   }
 
@@ -134,7 +137,7 @@ export class ChatManager {
   public isReady(): boolean {
     return this.dataChannelManager.isReady();
   }
-  
+
   /**
    * Wait for chat to be ready (with timeout)
    */

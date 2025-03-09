@@ -5,15 +5,7 @@
 
 import { FirebaseManager } from './FirebaseManager';
 import { SignalingMessage } from '../../services/signaling';
-import {
-  collection,
-  addDoc,
-  query,
-  where,
-  orderBy,
-  getDocs,
-  Timestamp,
-} from 'firebase/firestore';
+import { collection, addDoc, query, where, orderBy, getDocs, Timestamp } from 'firebase/firestore';
 import { createLogger } from '../../services/logger';
 
 export class FirebaseSignalingManager extends FirebaseManager {
@@ -28,7 +20,7 @@ export class FirebaseSignalingManager extends FirebaseManager {
 
     try {
       this.logger.info(`Sending ${message.type} signal in room ${roomId}`);
-      
+
       // Add timestamp to message
       const timestamp = Date.now();
       const firestoreTimestamp = Timestamp.fromMillis(timestamp);
@@ -42,7 +34,7 @@ export class FirebaseSignalingManager extends FirebaseManager {
       // Add message to room's signals collection
       const signalsCollectionRef = collection(db, 'rooms', roomId, 'signals');
       await addDoc(signalsCollectionRef, messageWithTimestamp);
-      
+
       this.logger.info(`Signal sent successfully`);
     } catch (error) {
       this.logger.error('Error sending signal:', error);
@@ -59,7 +51,7 @@ export class FirebaseSignalingManager extends FirebaseManager {
 
     try {
       this.logger.info(`Getting signals for room ${roomId} since ${new Date(since).toISOString()}`);
-      
+
       // Query messages since the given timestamp
       const sinceTimestamp = Timestamp.fromMillis(since);
       const signalsCollectionRef = collection(db, 'rooms', roomId, 'signals');

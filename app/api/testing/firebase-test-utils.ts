@@ -24,7 +24,7 @@ export class MockFirebaseApiClient implements ApiInterface {
   public async disconnect(): Promise<void> {
     this.connected = false;
   }
-  
+
   public isConnected(): boolean {
     return this.connected;
   }
@@ -90,23 +90,24 @@ export class MockFirebaseApiClient implements ApiInterface {
  */
 export function createFirebaseApiClientSpy(client: FirebaseApiClient): ApiInterface {
   const spy: Record<string, jest.SpyInstance> = {};
-  
+
   // Create spies for all methods
-  const methods = Object.getOwnPropertyNames(Object.getPrototypeOf(client))
-    .filter(method => typeof (client as any)[method] === 'function' && method !== 'constructor');
-  
+  const methods = Object.getOwnPropertyNames(Object.getPrototypeOf(client)).filter(
+    (method) => typeof (client as any)[method] === 'function' && method !== 'constructor'
+  );
+
   // Create a wrapper object with spies for all methods
   const wrapper = {} as any;
-  
-  methods.forEach(method => {
+
+  methods.forEach((method) => {
     spy[method] = jest.spyOn(client, method as any);
     wrapper[method] = (...args: any[]) => (client as any)[method](...args);
   });
-  
+
   // Add spy accessor methods
   wrapper.getSpy = (method: string) => spy[method];
-  wrapper.resetAllSpies = () => Object.values(spy).forEach(s => s.mockClear());
-  
+  wrapper.resetAllSpies = () => Object.values(spy).forEach((s) => s.mockClear());
+
   return wrapper as ApiInterface & {
     getSpy: (method: string) => jest.SpyInstance;
     resetAllSpies: () => void;

@@ -7,8 +7,8 @@ jest.mock('../../services/logger', () => ({
     debug: jest.fn(),
     info: jest.fn(),
     warn: jest.fn(),
-    error: jest.fn()
-  }))
+    error: jest.fn(),
+  })),
 }));
 
 // Mock for Date.now
@@ -48,7 +48,7 @@ class MockApiClient implements ApiInterface {
     return Promise.resolve({
       roomId: this.mockRoomId,
       userId: this.mockUserId,
-      created: Date.now()
+      created: Date.now(),
     });
   }
 
@@ -56,15 +56,15 @@ class MockApiClient implements ApiInterface {
     if (!this.connected) {
       throw new Error('Not connected');
     }
-    
+
     if (roomId === 'invalid-room') {
       throw new Error('Room not found');
     }
-    
+
     this.joinedRooms.add(roomId);
     return Promise.resolve({
       userId: this.mockUserId,
-      joined: Date.now()
+      joined: Date.now(),
     });
   }
 
@@ -80,11 +80,11 @@ class MockApiClient implements ApiInterface {
     if (!this.connected) {
       throw new Error('Not connected');
     }
-    
+
     if (roomId === 'error-room') {
       throw new Error('Failed to send signal');
     }
-    
+
     this.messageQueue.push(message);
     return Promise.resolve();
   }
@@ -93,13 +93,13 @@ class MockApiClient implements ApiInterface {
     if (!this.connected) {
       throw new Error('Not connected');
     }
-    
+
     if (roomId === 'error-room') {
       throw new Error('Failed to get signals');
     }
-    
+
     if (since) {
-      return this.messageQueue.filter(msg => (msg.timestamp || 0) > since);
+      return this.messageQueue.filter((msg) => (msg.timestamp || 0) > since);
     }
     return [...this.messageQueue];
   }
@@ -108,11 +108,11 @@ class MockApiClient implements ApiInterface {
   clearMessages(): void {
     this.messageQueue = [];
   }
-  
+
   addTestMessage(message: SignalingMessage): void {
     this.messageQueue.push(message);
   }
-  
+
   getQueuedMessages(): SignalingMessage[] {
     return [...this.messageQueue];
   }
@@ -121,25 +121,25 @@ class MockApiClient implements ApiInterface {
 describe('SignalingService', () => {
   let signaling: SignalingService;
   let mockApiClient: MockApiClient;
-  
+
   // Setup interval spy
   let setIntervalSpy: jest.SpyInstance;
   let clearIntervalSpy: jest.SpyInstance;
-  
+
   beforeEach(() => {
     jest.clearAllMocks();
-    
+
     // Reset mock timestamp for consistent testing
     (Date.now as jest.Mock).mockReturnValue(mockTimestamp);
-    
+
     // Setup interval spies
     setIntervalSpy = jest.spyOn(global, 'setInterval');
     clearIntervalSpy = jest.spyOn(global, 'clearInterval');
-    
+
     // Create mock API client
     mockApiClient = new MockApiClient();
     mockApiClient.connect();
-    
+
     // Create signaling service with mock API client
     signaling = new SignalingService(mockApiClient);
   });
@@ -148,13 +148,13 @@ describe('SignalingService', () => {
     // Restore spies
     setIntervalSpy.mockRestore();
     clearIntervalSpy.mockRestore();
-    
+
     // Clean up any remaining polling
     if (signaling) {
       // Call private leaveRoom to clean up resources
       signaling.leaveRoom().catch(() => {});
     }
-    
+
     // Clear mocks
     jest.clearAllMocks();
   });
@@ -167,7 +167,7 @@ describe('SignalingService', () => {
   describe('Room operations', () => {
     test('should join a room successfully', async () => {
       const userId = await signaling.joinRoom('test-room-id');
-      
+
       expect(userId).toBe('test-user-id');
       expect(signaling.getRoomId()).toBe('test-room-id');
       expect(signaling.getUserId()).toBe('test-user-id');
@@ -182,7 +182,7 @@ describe('SignalingService', () => {
 
     test('should create a room successfully', async () => {
       const result = await signaling.createRoom();
-      
+
       expect(result.roomId).toBe('test-room-id');
       expect(result.userId).toBe('test-user-id');
       expect(signaling.getRoomId()).toBe('test-room-id');
@@ -193,10 +193,10 @@ describe('SignalingService', () => {
     test('should leave room successfully', async () => {
       // First join a room
       await signaling.joinRoom('test-room-id');
-      
+
       // Then leave it
       await signaling.leaveRoom();
-      
+
       expect(signaling.getRoomId()).toBeNull();
       expect(signaling.getUserId()).toBeNull();
       expect(clearIntervalSpy).toHaveBeenCalled();
@@ -206,14 +206,14 @@ describe('SignalingService', () => {
       // First join an error-prone room
       jest.spyOn(mockApiClient, 'joinRoom').mockResolvedValueOnce({
         userId: 'test-user-id',
-        joined: Date.now()
+        joined: Date.now(),
       });
-      
+
       await signaling.joinRoom('error-room');
-      
+
       // Then try to leave it (should handle error gracefully)
       await signaling.leaveRoom();
-      
+
       // Should reset state even if API call fails
       expect(signaling.getRoomId()).toBeNull();
       expect(signaling.getUserId()).toBeNull();
@@ -222,7 +222,7 @@ describe('SignalingService', () => {
     test('should validate room ID before joining', async () => {
       // Empty room ID
       await expect(signaling.joinRoom('')).rejects.toThrow();
-      
+
       // Null room ID
       await expect(signaling.joinRoom(null as unknown as string)).rejects.toThrow();
     });
@@ -232,10 +232,10 @@ describe('SignalingService', () => {
     beforeEach(async () => {
       // Join a room to enable polling
       await signaling.joinRoom('test-room-id');
-      
+
       // Clear any messages
       mockApiClient.clearMessages();
-      
+
       // Ensure setInterval was called
       expect(setIntervalSpy).toHaveBeenCalledTimes(1);
       expect(setIntervalSpy).toHaveBeenCalledWith(expect.any(Function), 1000);
@@ -258,27 +258,27 @@ describe('SignalingService', () => {
         sender: 'other-user',
         roomId: 'test-room-id',
         data: { test: 'data' },
-        timestamp: 1000
+        timestamp: 1000,
       };
-      
+
       const message2: SignalingMessage = {
         type: 'test',
         sender: 'other-user',
         roomId: 'test-room-id',
         data: { test: 'data' },
-        timestamp: 2000
+        timestamp: 2000,
       };
-      
+
       mockApiClient.addTestMessage(message1);
       mockApiClient.addTestMessage(message2);
-      
+
       // Mock getSignals to return our test messages
       const getSignalsSpy = jest.spyOn(mockApiClient, 'getSignals');
       getSignalsSpy.mockResolvedValueOnce([message1, message2]);
-      
+
       // Manually trigger polling
       await (signaling as any).pollMessages();
-      
+
       // Should have updated the lastMessageTime to the highest timestamp
       expect(getSignalsSpy).toHaveBeenCalledWith('test-room-id', mockTimestamp);
       expect((signaling as any).lastMessageTime).toBe(2000);
@@ -287,13 +287,13 @@ describe('SignalingService', () => {
     test('should not update lastMessageTime when no messages', async () => {
       // Set initial lastMessageTime
       (signaling as any).lastMessageTime = 5000;
-      
+
       // Mock getSignals to return empty array
       jest.spyOn(mockApiClient, 'getSignals').mockResolvedValueOnce([]);
-      
+
       // Manually trigger polling
       await (signaling as any).pollMessages();
-      
+
       // Should not have updated the lastMessageTime
       expect((signaling as any).lastMessageTime).toBe(5000);
     });
@@ -301,13 +301,13 @@ describe('SignalingService', () => {
     test('should handle errors during polling', async () => {
       // Mock API error
       jest.spyOn(mockApiClient, 'getSignals').mockRejectedValueOnce(new Error('Network error'));
-      
+
       // Set initial lastMessageTime
       (signaling as any).lastMessageTime = 5000;
-      
+
       // Trigger polling, should not throw
       await expect((signaling as any).pollMessages()).resolves.not.toThrow();
-      
+
       // Should keep lastMessageTime the same
       expect((signaling as any).lastMessageTime).toBe(5000);
     });
@@ -315,15 +315,15 @@ describe('SignalingService', () => {
 
   describe('Message handling', () => {
     let mockHandler: jest.Mock;
-    
+
     beforeEach(async () => {
       // Join a room
       await signaling.joinRoom('test-room-id');
-      
+
       // Setup mock handler
       mockHandler = jest.fn();
       signaling.on('test-event', mockHandler);
-      
+
       // Clear any messages
       mockApiClient.clearMessages();
     });
@@ -334,18 +334,18 @@ describe('SignalingService', () => {
         sender: 'other-user',
         roomId: 'test-room-id',
         data: { test: 'data' },
-        timestamp: mockTimestamp + 1
+        timestamp: mockTimestamp + 1,
       };
-      
+
       // Add message to queue
       mockApiClient.addTestMessage(message);
-      
+
       // Mock getSignals to return our test message
       jest.spyOn(mockApiClient, 'getSignals').mockResolvedValueOnce([message]);
-      
+
       // Trigger polling
       await (signaling as any).pollMessages();
-      
+
       // Handler should have been called
       expect(mockHandler).toHaveBeenCalledWith(message);
     });
@@ -357,18 +357,18 @@ describe('SignalingService', () => {
         sender: 'test-user-id', // Same as the user ID returned by joinRoom
         roomId: 'test-room-id',
         data: { test: 'data' },
-        timestamp: mockTimestamp + 1
+        timestamp: mockTimestamp + 1,
       };
-      
+
       // Add message to queue
       mockApiClient.addTestMessage(message);
-      
+
       // Mock getSignals to return our test message
       jest.spyOn(mockApiClient, 'getSignals').mockResolvedValueOnce([message]);
-      
+
       // Trigger polling
       await (signaling as any).pollMessages();
-      
+
       // Handler should NOT have been called (own message)
       expect(mockHandler).not.toHaveBeenCalled();
     });
@@ -381,18 +381,18 @@ describe('SignalingService', () => {
         receiver: 'not-this-user',
         roomId: 'test-room-id',
         data: { test: 'data' },
-        timestamp: mockTimestamp + 1
+        timestamp: mockTimestamp + 1,
       };
-      
+
       // Add message to queue
       mockApiClient.addTestMessage(message);
-      
+
       // Mock getSignals to return our test message
       jest.spyOn(mockApiClient, 'getSignals').mockResolvedValueOnce([message]);
-      
+
       // Trigger polling
       await (signaling as any).pollMessages();
-      
+
       // Handler should NOT have been called (different receiver)
       expect(mockHandler).not.toHaveBeenCalled();
     });
@@ -405,18 +405,18 @@ describe('SignalingService', () => {
         receiver: 'test-user-id', // Same as userId from joinRoom
         roomId: 'test-room-id',
         data: { test: 'data' },
-        timestamp: mockTimestamp + 1
+        timestamp: mockTimestamp + 1,
       };
-      
+
       // Add message to queue
       mockApiClient.addTestMessage(message);
-      
+
       // Mock getSignals to return our test message
       jest.spyOn(mockApiClient, 'getSignals').mockResolvedValueOnce([message]);
-      
+
       // Trigger polling
       await (signaling as any).pollMessages();
-      
+
       // Handler should have been called (message for this user)
       expect(mockHandler).toHaveBeenCalledWith(message);
     });
@@ -425,37 +425,37 @@ describe('SignalingService', () => {
       // Create handlers for two different message types
       const handler1 = jest.fn();
       const handler2 = jest.fn();
-      
+
       signaling.on('event1', handler1);
       signaling.on('event2', handler2);
-      
+
       // Create messages of different types
       const message1: SignalingMessage = {
         type: 'event1',
         sender: 'other-user',
         roomId: 'test-room-id',
         data: { test: 'data1' },
-        timestamp: mockTimestamp + 1
+        timestamp: mockTimestamp + 1,
       };
-      
+
       const message2: SignalingMessage = {
         type: 'event2',
         sender: 'other-user',
         roomId: 'test-room-id',
         data: { test: 'data2' },
-        timestamp: mockTimestamp + 2
+        timestamp: mockTimestamp + 2,
       };
-      
+
       // Add messages to queue
       mockApiClient.addTestMessage(message1);
       mockApiClient.addTestMessage(message2);
-      
+
       // Mock getSignals to return our test messages
       jest.spyOn(mockApiClient, 'getSignals').mockResolvedValueOnce([message1, message2]);
-      
+
       // Trigger polling
       await (signaling as any).pollMessages();
-      
+
       // Both handlers should have been called with their respective messages
       expect(handler1).toHaveBeenCalledWith(message1);
       expect(handler2).toHaveBeenCalledWith(message2);
@@ -466,27 +466,27 @@ describe('SignalingService', () => {
       const errorHandler = jest.fn().mockImplementation(() => {
         throw new Error('Handler error');
       });
-      
+
       signaling.on('error-event', errorHandler);
-      
+
       // Create a message that will trigger the error handler
       const message: SignalingMessage = {
         type: 'error-event',
         sender: 'other-user',
         roomId: 'test-room-id',
         data: { test: 'data' },
-        timestamp: mockTimestamp + 1
+        timestamp: mockTimestamp + 1,
       };
-      
+
       // Add message to queue
       mockApiClient.addTestMessage(message);
-      
+
       // Mock getSignals to return our test message
       jest.spyOn(mockApiClient, 'getSignals').mockResolvedValueOnce([message]);
-      
+
       // Trigger polling - should not throw despite handler error
       await expect((signaling as any).pollMessages()).resolves.not.toThrow();
-      
+
       // Handler should have been called
       expect(errorHandler).toHaveBeenCalled();
     });
@@ -494,28 +494,28 @@ describe('SignalingService', () => {
     test('should remove message handler with off()', async () => {
       // Register handler
       signaling.on('test-event', mockHandler);
-      
+
       // Then remove it
       signaling.off('test-event');
-      
+
       // Create a message
       const message: SignalingMessage = {
         type: 'test-event',
         sender: 'other-user',
         roomId: 'test-room-id',
         data: { test: 'data' },
-        timestamp: mockTimestamp + 1
+        timestamp: mockTimestamp + 1,
       };
-      
+
       // Add message to queue
       mockApiClient.addTestMessage(message);
-      
+
       // Mock getSignals to return our test message
       jest.spyOn(mockApiClient, 'getSignals').mockResolvedValueOnce([message]);
-      
+
       // Trigger polling
       await (signaling as any).pollMessages();
-      
+
       // Handler should NOT have been called (was removed)
       expect(mockHandler).not.toHaveBeenCalled();
     });
@@ -524,13 +524,13 @@ describe('SignalingService', () => {
       // Register multiple handlers
       const handler1 = jest.fn();
       const handler2 = jest.fn();
-      
+
       signaling.on('event1', handler1);
       signaling.on('event2', handler2);
-      
+
       // Leave room
       await signaling.leaveRoom();
-      
+
       // Check that messageHandlers map is empty
       expect((signaling as any).messageHandlers.size).toBe(0);
     });
@@ -540,7 +540,7 @@ describe('SignalingService', () => {
     beforeEach(async () => {
       // Join a room
       await signaling.joinRoom('test-room-id');
-      
+
       // Clear any messages
       mockApiClient.clearMessages();
     });
@@ -548,27 +548,27 @@ describe('SignalingService', () => {
     test('should send message correctly', async () => {
       // Spy on sendSignal method
       const sendSignalSpy = jest.spyOn(mockApiClient, 'sendSignal');
-      
+
       // Send a message
       await signaling.sendMessage('test-type', { foo: 'bar' });
-      
+
       // Check that sendSignal was called with correct parameters
       expect(sendSignalSpy).toHaveBeenCalledWith('test-room-id', {
         type: 'test-type',
         sender: 'test-user-id',
         roomId: 'test-room-id',
         data: { foo: 'bar' },
-        timestamp: mockTimestamp
+        timestamp: mockTimestamp,
       });
     });
 
     test('should send message with receiver', async () => {
       // Spy on sendSignal method
       const sendSignalSpy = jest.spyOn(mockApiClient, 'sendSignal');
-      
+
       // Send a message with receiver
       await signaling.sendMessage('test-type', { foo: 'bar' }, 'other-user');
-      
+
       // Check that sendSignal was called with correct parameters
       expect(sendSignalSpy).toHaveBeenCalledWith('test-room-id', {
         type: 'test-type',
@@ -576,42 +576,50 @@ describe('SignalingService', () => {
         receiver: 'other-user',
         roomId: 'test-room-id',
         data: { foo: 'bar' },
-        timestamp: mockTimestamp
+        timestamp: mockTimestamp,
       });
     });
 
     test('should throw when sending message while not in room', async () => {
       // Leave room first
       await signaling.leaveRoom();
-      
+
       // Try to send message
-      await expect(signaling.sendMessage('test-type', { foo: 'bar' }))
-        .rejects.toThrow('Not connected to a room');
+      await expect(signaling.sendMessage('test-type', { foo: 'bar' })).rejects.toThrow(
+        'Not connected to a room'
+      );
     });
 
     test('should handle send errors', async () => {
       // Mock sendSignal to throw error
       jest.spyOn(mockApiClient, 'sendSignal').mockRejectedValueOnce(new Error('Send error'));
-      
+
       // Try to send message
-      await expect(signaling.sendMessage('test-type', { foo: 'bar' }))
-        .rejects.toThrow('Send error');
+      await expect(signaling.sendMessage('test-type', { foo: 'bar' })).rejects.toThrow(
+        'Send error'
+      );
     });
 
     test('should send with forced room ID and user ID', async () => {
       // Spy on sendSignal method
       const sendSignalSpy = jest.spyOn(mockApiClient, 'sendSignal');
-      
+
       // Send a message with forced room and user IDs
-      await signaling.sendMessage('test-type', { foo: 'bar' }, undefined, 'forced-room', 'forced-user');
-      
+      await signaling.sendMessage(
+        'test-type',
+        { foo: 'bar' },
+        undefined,
+        'forced-room',
+        'forced-user'
+      );
+
       // Check that sendSignal was called with correct parameters
       expect(sendSignalSpy).toHaveBeenCalledWith('forced-room', {
         type: 'test-type',
         sender: 'forced-user',
         roomId: 'forced-room',
         data: { foo: 'bar' },
-        timestamp: mockTimestamp
+        timestamp: mockTimestamp,
       });
     });
   });
@@ -620,10 +628,12 @@ describe('SignalingService', () => {
     test('should handle API errors when joining room', async () => {
       // Mock API to throw error
       jest.spyOn(mockApiClient, 'joinRoom').mockRejectedValueOnce(new Error('API error'));
-      
+
       // Try to join room
-      await expect(signaling.joinRoom('test-room-id')).rejects.toThrow('Signaling error: API error');
-      
+      await expect(signaling.joinRoom('test-room-id')).rejects.toThrow(
+        'Signaling error: API error'
+      );
+
       // Should not have set room or user ID
       expect(signaling.getRoomId()).toBeNull();
       expect(signaling.getUserId()).toBeNull();
@@ -632,10 +642,10 @@ describe('SignalingService', () => {
     test('should handle API errors when creating room', async () => {
       // Mock API to throw error
       jest.spyOn(mockApiClient, 'createRoom').mockRejectedValueOnce(new Error('API error'));
-      
+
       // Try to create room
       await expect(signaling.createRoom()).rejects.toThrow('API error');
-      
+
       // Should not have set room or user ID
       expect(signaling.getRoomId()).toBeNull();
       expect(signaling.getUserId()).toBeNull();
@@ -644,10 +654,10 @@ describe('SignalingService', () => {
     test('should handle network failures during polling', async () => {
       // First join a room
       await signaling.joinRoom('test-room-id');
-      
+
       // Mock getSignals to simulate network failure
       jest.spyOn(mockApiClient, 'getSignals').mockRejectedValueOnce(new Error('Network failure'));
-      
+
       // Manually trigger polling - should not throw
       await expect((signaling as any).pollMessages()).resolves.not.toThrow();
     });
@@ -655,13 +665,13 @@ describe('SignalingService', () => {
     test('should handle API errors when leaving room', async () => {
       // First join a room
       await signaling.joinRoom('test-room-id');
-      
+
       // Mock leaveRoom to throw error
       jest.spyOn(mockApiClient, 'leaveRoom').mockRejectedValueOnce(new Error('API error'));
-      
+
       // Leave room - should not throw
       await expect(signaling.leaveRoom()).resolves.not.toThrow();
-      
+
       // Should still have cleared state
       expect(signaling.getRoomId()).toBeNull();
       expect(signaling.getUserId()).toBeNull();

@@ -5,12 +5,7 @@
 
 import { FirebaseManager } from './FirebaseManager';
 import { RoomResponse, JoinRoomResponse } from '../ApiInterface';
-import {
-  doc,
-  setDoc,
-  getDoc,
-  Timestamp,
-} from 'firebase/firestore';
+import { doc, setDoc, getDoc, Timestamp } from 'firebase/firestore';
 import { createLogger } from '../../services/logger';
 
 export class FirebaseRoomManager extends FirebaseManager {
@@ -145,7 +140,7 @@ export class FirebaseRoomManager extends FirebaseManager {
 
     try {
       this.logger.info('Leaving room:', roomId, 'User:', userId);
-      
+
       // Mark user as inactive
       const userRef = doc(db, 'rooms', roomId, 'users', userId);
       await setDoc(
@@ -156,7 +151,7 @@ export class FirebaseRoomManager extends FirebaseManager {
         },
         { merge: true }
       );
-      
+
       this.logger.info('Successfully left room');
     } catch (error) {
       this.logger.error('Error leaving room:', error);

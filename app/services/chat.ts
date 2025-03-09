@@ -50,7 +50,7 @@ export class ChatManager {
   public isReady(): boolean {
     return this.chatManager.isReady();
   }
-  
+
   /**
    * Wait for data channel to open (with timeout)
    */
