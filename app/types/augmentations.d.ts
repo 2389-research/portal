@@ -19,7 +19,7 @@ interface HTMLMediaElement {
 // Extend MediaDevices with getDisplayMedia method for screen sharing
 interface MediaDevices {
   /**
-   * Prompts the user to select a display or portion of a display to capture 
+   * Prompts the user to select a display or portion of a display to capture
    * as a MediaStream for screen sharing.
    * @param constraints - The media constraints for the stream to obtain.
    * @returns A Promise that resolves to a MediaStream object.
