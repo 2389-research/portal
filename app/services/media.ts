@@ -642,6 +642,6 @@ export class MediaManager {
    */
   public isScreenShareSupported(): boolean {
     // @ts-ignore: TypeScript doesn't recognize getDisplayMedia on mediaDevices
-    return !!(navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia);
+    return !!navigator.mediaDevices?.getDisplayMedia;
   }
 }
