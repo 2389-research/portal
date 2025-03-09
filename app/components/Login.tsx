@@ -125,9 +125,9 @@ export const Login: React.FC<LoginProps> = ({ onLoginStateChange }) => {
             <Avatar size="medium" style={styles.avatar} />
           )}
           <View style={styles.userInfo}>
-            <Text category="s1">{user.displayName}</Text>
+            <Text category="s1">{user.displayName || 'User'}</Text>
             <Text category="c1" appearance="hint">
-              {user.email}
+              {user.email || 'No email provided'}
             </Text>
           </View>
           <Button
