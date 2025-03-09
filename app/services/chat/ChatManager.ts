@@ -123,6 +123,15 @@ export class ChatManager {
   public onMessage(callback: (message: ChatMessage) => void): void {
     this.onMessageCallback = callback;
   }
+  
+  /**
+   * Register a callback for data channel ready state changes
+   * @param callback Function to call when ready state changes
+   * @returns Function to unregister the callback
+   */
+  public onReadyStateChange(callback: (isReady: boolean) => void): () => void {
+    return this.dataChannelManager.onReadyStateChange(callback);
+  }
 
   /**
    * Get all messages
