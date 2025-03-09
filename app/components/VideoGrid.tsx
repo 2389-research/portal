@@ -35,17 +35,20 @@ export const VideoGrid: React.FC<VideoGridProps> = ({
 
     if (totalParticipants <= 1) {
       return { columns: 1, rows: 1 };
-    } else if (totalParticipants <= 2) {
-      return { columns: 2, rows: 1 };
-    } else if (totalParticipants <= 4) {
-      return { columns: 2, rows: 2 };
-    } else if (totalParticipants <= 6) {
-      return { columns: 3, rows: 2 };
-    } else if (totalParticipants <= 9) {
-      return { columns: 3, rows: 3 };
-    } else {
-      return { columns: 4, rows: 3 };
     }
+    if (totalParticipants <= 2) {
+      return { columns: 2, rows: 1 };
+    }
+    if (totalParticipants <= 4) {
+      return { columns: 2, rows: 2 };
+    }
+    if (totalParticipants <= 6) {
+      return { columns: 3, rows: 2 };
+    }
+    if (totalParticipants <= 9) {
+      return { columns: 3, rows: 3 };
+    }
+    return { columns: 4, rows: 3 };
   };
 
   const layout = getGridLayout();

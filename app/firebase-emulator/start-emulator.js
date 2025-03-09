@@ -3,8 +3,8 @@
  * This script is used by the test framework to start the Firebase emulator
  */
 
-const { spawn } = require('child_process');
-const path = require('path');
+const { spawn } = require('node:child_process');
+const path = require('node:path');
 
 // Use __dirname to get the directory path
 // eslint-disable-next-line no-undef

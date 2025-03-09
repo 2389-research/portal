@@ -60,9 +60,8 @@ export class SignalingService {
       // Provide more specific error information
       if (typeof error === 'object' && error !== null && 'message' in error) {
         throw new Error(`Signaling error: ${(error as { message: string }).message}`);
-      } else {
-        throw new Error('Failed to join room via signaling service.');
       }
+      throw new Error('Failed to join room via signaling service.');
     }
   }
 

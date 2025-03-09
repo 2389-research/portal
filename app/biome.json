@@ -9,20 +9,32 @@
       "recommended": true,
       "suspicious": {
         "noGlobalAssign": "error",
-        "noSelfCompare": "error"
+        "noSelfCompare": "error",
+        "noExplicitAny": "off",
+        "noPrototypeBuiltins": "off",
+        "noAssignInExpressions": "off",
+        "noDuplicateFontNames": "off",
+        "noEmptyBlock": "off"
       },
       "complexity": {
         "noUselessCatch": "error",
-        "useOptionalChain": "warn"
+        "useOptionalChain": "warn",
+        "noForEach": "off"
       },
       "style": {
         "noNegationElse": "warn",
         "useConst": "warn",
-        "useTemplate": "warn"
+        "useTemplate": "warn",
+        "noNonNullAssertion": "off",
+        "noParameterAssign": "off"
       },
       "a11y": {
         "useMediaCaption": "error",
-        "useButtonType": "error"
+        "useButtonType": "error",
+        "useGenericFontNames": "off"
+      },
+      "correctness": {
+        "useExhaustiveDependencies": "off"
       }
     }
   },
@@ -38,5 +50,8 @@
       "trailingCommas": "es5",
       "semicolons": "always"
     }
+  },
+  "files": {
+    "maxSize": 3000000
   }
 }

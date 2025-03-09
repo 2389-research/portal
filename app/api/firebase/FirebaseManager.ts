@@ -73,7 +73,7 @@ export class FirebaseManager {
   protected generateRandomId(prefix: string, length = 12): string {
     // Generate a random alphanumeric ID
     const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-    let result = prefix + '_';
+    let result = `${prefix}_`;
     for (let i = 0; i < length; i++) {
       result += chars.charAt(Math.floor(Math.random() * chars.length));
     }

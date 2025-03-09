@@ -219,7 +219,7 @@ export default function RoomScreen() {
             case 'signaling':
               // For signaling, this is critical so we stop with an error
               setError(
-                `Room initialization timed out during signaling phase. Please try again later.`
+                'Room initialization timed out during signaling phase. Please try again later.'
               );
               setLoading(false);
               break;
@@ -254,7 +254,7 @@ export default function RoomScreen() {
 
         logger.info('Auth phase: Getting API provider');
         // Get API provider - wrap in try/catch to continue even if auth fails
-        let apiClient;
+        let apiClient: any = null;
         try {
           const provider = ApiProvider.getInstance();
           apiClient = provider.getApiClient();
@@ -474,7 +474,7 @@ export default function RoomScreen() {
         try {
           console.log('[Room] Requesting permission status...');
           // @ts-ignore - Permissions API may not be available in all browsers
-          if (navigator.permissions && navigator.permissions.query) {
+          if (navigator.permissions?.query) {
             // @ts-ignore
             const cameraPermission = await navigator.permissions.query({ name: 'camera' });
             console.log('[Room] Camera permission status:', cameraPermission.state);

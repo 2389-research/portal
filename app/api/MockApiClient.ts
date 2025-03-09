@@ -190,6 +190,6 @@ export class MockApiClient implements ApiInterface {
    */
   private generateUserId(): string {
     // Generate a UUID-like string
-    return 'mock_user_' + Math.random().toString(36).substring(2, 15);
+    return `mock_user_${Math.random().toString(36).substring(2, 15)}`;
   }
 }

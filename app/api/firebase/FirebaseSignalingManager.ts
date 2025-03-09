@@ -35,7 +35,7 @@ export class FirebaseSignalingManager extends FirebaseManager {
       const signalsCollectionRef = collection(db, 'rooms', roomId, 'signals');
       await addDoc(signalsCollectionRef, messageWithTimestamp);
 
-      this.logger.info(`Signal sent successfully`);
+      this.logger.info('Signal sent successfully');
     } catch (error) {
       this.logger.error('Error sending signal:', error);
       throw error;
