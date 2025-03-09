@@ -3,13 +3,6 @@ import { StyleSheet, View, Alert, Clipboard } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Layout, Text, Button, Icon, IconProps, Spinner } from '@ui-kitten/components';
 
-// Define interfaces for the component
-interface MediaDevice {
-  deviceId: string;
-  kind: 'audioinput' | 'videoinput' | 'audiooutput';
-  label: string;
-}
-
 // Import components
 import { VideoGrid } from '../../components/VideoGrid';
 import { ChatInterface } from '../../components/ChatInterface';
@@ -24,6 +17,13 @@ import { SignalingService } from '../../services/signaling';
 import { ChatManager, ChatMessage } from '../../services/chat/index';
 import { createLogger } from '../../services/logger';
 
+// Define interfaces for the component
+interface MediaDevice {
+  deviceId: string;
+  kind: 'audioinput' | 'videoinput' | 'audiooutput';
+  label: string;
+}
+
 export default function RoomScreen() {
   const { id: roomId } = useLocalSearchParams();
   const router = useRouter();
@@ -33,8 +33,8 @@ export default function RoomScreen() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [connected, setConnected] = useState(false);
-  const [_userId, setUserId] = useState<string | null>(null); // Prefixed with _ to indicate currently unused
-  const [_isAuthenticated, setIsAuthenticated] = useState(false); // Prefixed with _ to indicate currently unused
+  const [/* userId */, setUserId] = useState<string | null>(null); // Currently unused
+  const [/* isAuthenticated */, setIsAuthenticated] = useState(false); // Currently unused
   const [initPhase, setInitPhase] = useState<'auth' | 'media' | 'webrtc' | 'signaling' | 'chat' | 'complete'>('auth');
 
   // State for media controls
@@ -57,7 +57,7 @@ export default function RoomScreen() {
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [chatReady, setChatReady] = useState(false);
   const [isChatVisible, setIsChatVisible] = useState(false);
-  const [_lastChatCheck, setLastChatCheck] = useState(0); // To track periodic checks (currently unused)
+  const [/* _lastChatCheck */, setLastChatCheck] = useState(0); // To track periodic checks (currently unused)
   
   // State for error handling
   const [mediaError, setMediaError] = useState<string | null>(null);
@@ -110,9 +110,6 @@ export default function RoomScreen() {
 
     // Set multiple timeouts for different initialization phases
     const timeouts: NodeJS.Timeout[] = [];
-    
-    // Define skipMediaAccess state
-    const [skipMediaAccess, setSkipMediaAccess] = useState(false);
 
     // Define cleanup function for use in useEffect
     const cleanup = async () => {
@@ -561,7 +558,7 @@ export default function RoomScreen() {
         }
       })();
     };
-  }, [roomId, initPhase, loading, logger]);
+  }, [roomId, initPhase, loading, logger, localStream, skipMediaAccess, cleanup]);
 
   // Setup signaling handlers for WebRTC
   const setupSignalingHandlers = () => {
@@ -839,6 +836,8 @@ export default function RoomScreen() {
     setScreenShareStream, 
     setUserId,
     screenShareStream
+    // localStream is read but not a required dependency since we just need to know if it exists
+    // and we're not using its value directly
   ]);
 
   // Copy room ID to clipboard
