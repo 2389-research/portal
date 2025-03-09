@@ -666,7 +666,7 @@ describe('MediaManager', () => {
       expect(supported).toBe(true);
 
       // Without support
-      delete mockAudioElement.setSinkId;
+      mockAudioElement.setSinkId = undefined;
       const unsupported = mediaManager.isSinkIdSupported(
         mockAudioElement as unknown as HTMLMediaElement
       );
