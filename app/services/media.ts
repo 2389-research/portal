@@ -401,11 +401,9 @@ export class MediaManager {
       logger.info(`Switching audio output device to ${deviceId}`);
 
       // Check if setSinkId is supported
-      // @ts-ignore: setSinkId may not be available in all browsers
       if (element.setSinkId) {
         logger.debug('setSinkId is supported, setting output device');
         try {
-          // @ts-ignore
           await element.setSinkId(deviceId);
           this.currentAudioOutputDevice = deviceId;
           logger.info('Audio output device switched successfully');
@@ -428,7 +426,6 @@ export class MediaManager {
    * Check if setSinkId is supported by the browser
    */
   public isSinkIdSupported(element: HTMLMediaElement): boolean {
-    // @ts-ignore: setSinkId may not be available in all browsers
     return typeof element.setSinkId === 'function';
   }
 
@@ -596,13 +593,11 @@ export class MediaManager {
       logger.info('Requesting screen sharing');
 
       // Check if getDisplayMedia is available
-      // @ts-ignore: TypeScript doesn't recognize getDisplayMedia on mediaDevices
       if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) {
         logger.error('getDisplayMedia is not supported in this browser');
         return null;
       }
 
-      // @ts-ignore: TypeScript doesn't recognize getDisplayMedia on mediaDevices
       const stream = await navigator.mediaDevices.getDisplayMedia({ video: true });
 
       logger.info('Screen sharing access granted');
@@ -638,7 +633,6 @@ export class MediaManager {
    * Check if the browser supports getDisplayMedia for screen sharing
    */
   public isScreenShareSupported(): boolean {
-    // @ts-ignore: TypeScript doesn't recognize getDisplayMedia on mediaDevices
     return !!navigator.mediaDevices?.getDisplayMedia;
   }
 }
