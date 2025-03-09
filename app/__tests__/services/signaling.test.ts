@@ -21,9 +21,9 @@ Date.now = jest.fn(() => mockTimestamp);
  */
 class MockApiClient implements ApiInterface {
   private messageQueue: SignalingMessage[] = [];
-  private mockUserId: string = 'test-user-id';
-  private mockRoomId: string = 'test-room-id';
-  private connected: boolean = false;
+  private mockUserId = 'test-user-id';
+  private mockRoomId = 'test-room-id';
+  private connected = false;
   private joinedRooms: Set<string> = new Set();
 
   async connect(): Promise<void> {
