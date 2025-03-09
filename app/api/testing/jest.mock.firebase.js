@@ -231,10 +231,18 @@ jest.mock('firebase/firestore', () => {
     };
   });
   
+  // Create a proper mock Firestore db object that can be returned by getFirestore
+  const mockDb = {
+    app: { name: 'mock-app' },
+    collection: mockCollection,
+    doc: mockDoc,
+    // Add other properties that might be accessed
+    type: 'firestore',
+    toJSON: () => ({ type: 'firestore' }),
+  };
+  
   return {
-    getFirestore: jest.fn(() => ({
-      app: { name: 'mock-app' }
-    })),
+    getFirestore: jest.fn(() => mockDb),
     doc: mockDoc,
     collection: mockCollection,
     getDoc: mockGetDoc,

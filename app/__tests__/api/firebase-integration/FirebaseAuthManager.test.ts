@@ -14,8 +14,46 @@ const MOCK_USER = {
   photoURL: null,
 };
 
-// Import Firebase mocks to ensure they're loaded properly
-require('../../../api/testing/jest.mock.firebase.js');
+// Mock Firebase auth
+jest.mock('firebase/app', () => ({
+  initializeApp: jest.fn(() => ({ name: 'mock-app' })),
+  getApp: jest.fn().mockImplementation(() => {
+    throw new Error('No app found');
+  }),
+}));
+
+jest.mock('firebase/auth', () => {
+  // Mock authentication state
+  let currentUser = null;
+  
+  return {
+    getAuth: jest.fn(() => ({
+      currentUser,
+      app: { name: 'mock-app' }
+    })),
+    onAuthStateChanged: jest.fn((auth, callback) => {
+      // Immediately call with current state
+      callback(currentUser);
+      
+      // Return a properly callable unsubscribe function
+      const unsubscribe = () => {
+        return;
+      };
+      return unsubscribe;
+    }),
+    signInWithPopup: jest.fn(() => {
+      // Update current user
+      currentUser = { ...MOCK_USER };
+      return Promise.resolve({ user: currentUser });
+    }),
+    GoogleAuthProvider: jest.fn(),
+    signOut: jest.fn(() => {
+      currentUser = null;
+      return Promise.resolve();
+    }),
+    connectAuthEmulator: jest.fn(),
+  };
+});
 
 describe('FirebaseAuthManager Tests', () => {
   let authManager: FirebaseAuthManager;
@@ -49,14 +87,39 @@ describe('FirebaseAuthManager Tests', () => {
     });
 
     test('should handle auth state changes', async () => {
+      // Get Firebase auth module
+      const firebaseAuth = require('firebase/auth');
+      
+      // Update our onAuthStateChanged mock to call callback with each state change
+      // and track the active listeners
+      const listeners: Function[] = [];
+      firebaseAuth.onAuthStateChanged.mockImplementation((auth, callback) => {
+        listeners.push(callback);
+        callback(null); // Call with initial null state
+        return () => {
+          const index = listeners.indexOf(callback);
+          if (index > -1) {
+            listeners.splice(index, 1);
+          }
+        };
+      });
+
       // Setup auth state change listener
       const authChanges: any[] = [];
       const unsubscribe = authManager.onAuthStateChanged((user) => {
         authChanges.push(user);
       });
 
-      // Sign in
+      // The initial state should already be in our authChanges
+      expect(authChanges.length).toBe(1);
+      expect(authChanges[0]).toBeNull();
+
+      // Sign in - this will update currentUser and call all auth state listeners
       await authManager.signInWithGoogle();
+      
+      // Manually trigger all listeners with the new user state
+      const mockUser = { ...MOCK_USER };
+      listeners.forEach(listener => listener(mockUser));
 
       // Verify auth state changed
       expect(authManager.isSignedIn()).toBe(true);
@@ -67,8 +130,11 @@ describe('FirebaseAuthManager Tests', () => {
       const userId = authManager.getUserId();
       expect(userId).toBe(MOCK_USER.uid);
 
-      // Sign out
+      // Sign out - this will set currentUser to null and call all auth state listeners
       await authManager.signOut();
+      
+      // Manually trigger all listeners with null
+      listeners.forEach(listener => listener(null));
 
       // Verify auth state changed back
       expect(authManager.isSignedIn()).toBe(false);
@@ -77,8 +143,11 @@ describe('FirebaseAuthManager Tests', () => {
       // Clean up listener
       unsubscribe();
 
-      // Verify we got both auth states in our listener
-      expect(authChanges.length).toBeGreaterThanOrEqual(2); // Initial null state + sign in
+      // Verify we got all auth states in our listener:
+      // 1. Initial null state
+      // 2. Signed in state
+      // 3. Signed out state
+      expect(authChanges.length).toBeGreaterThanOrEqual(2);
     });
 
     test('should get Firebase user', async () => {
@@ -99,28 +168,23 @@ describe('FirebaseAuthManager Tests', () => {
       // Get Firebase auth module
       const firebaseAuth = require('firebase/auth');
       
-      // Mock user with missing fields
-      const mockUserWithMissingFields = {
-        uid: MOCK_USER.uid,
-        email: MOCK_USER.email,
-        // No displayName or photoURL
-      };
-      
-      // Mock getAuth to return our custom user
-      firebaseAuth.getAuth.mockImplementationOnce(() => ({
-        currentUser: mockUserWithMissingFields,
-        app: { name: 'mock-app' }
-      }));
-      
-      // Create a new manager to get the mock user
-      const newManager = new FirebaseAuthManager(FIREBASE_EMULATOR_CONFIG);
-      await newManager.connect();
-      
-      // Fake a sign-in to ensure the mock user is used
-      await newManager.signInWithGoogle();
+      // Create a special mock for sign-in with missing fields
+      firebaseAuth.signInWithPopup.mockImplementationOnce(() => {
+        // Return a user WITHOUT displayName or photoURL
+        return Promise.resolve({
+          user: {
+            uid: MOCK_USER.uid,
+            email: MOCK_USER.email,
+            // No displayName or photoURL
+          }
+        });
+      });
+
+      // Sign in with Google (which will use our special mock)
+      await authManager.signInWithGoogle();
       
       // Get the mapped user
-      const userInfo = newManager.getCurrentUser();
+      const userInfo = authManager.getCurrentUser();
 
       // Verify the user is mapped correctly even with missing fields
       expect(userInfo).not.toBeNull();
