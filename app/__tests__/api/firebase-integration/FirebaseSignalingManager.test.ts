@@ -1,18 +1,21 @@
 /**
  * Tests for FirebaseSignalingManager using simple mocks
- * 
+ *
  * Note: Currently only testing error handling due to mocking challenges.
  * TODO: Add more comprehensive tests for sending and retrieving signals.
  * This would require proper mocking of Firebase Firestore functions.
  */
 
 import { FirebaseSignalingManager } from '../../../api/firebase/FirebaseSignalingManager';
-import { FIREBASE_EMULATOR_CONFIG, generateTestRoomId } from '../../../api/testing/firebase-integration-utils';
+import {
+  FIREBASE_EMULATOR_CONFIG,
+  generateTestRoomId,
+} from '../../../api/testing/firebase-integration-utils';
 import type { SignalingMessage } from '../../../services/signaling';
 
 describe('FirebaseSignalingManager Error Handling', () => {
   const testRoomId = generateTestRoomId();
-  
+
   test('should throw when not connected', async () => {
     // Create a new instance without connecting
     const disconnectedManager = new FirebaseSignalingManager(FIREBASE_EMULATOR_CONFIG);

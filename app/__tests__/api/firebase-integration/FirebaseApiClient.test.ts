@@ -1,6 +1,6 @@
 /**
  * Basic tests for FirebaseApiClient
- * 
+ *
  * Note: Due to mocking challenges with Firebase, this test file only verifies
  * basic connection and error handling functionality.
  */
@@ -14,7 +14,7 @@ describe('FirebaseApiClient Basic Tests', () => {
   beforeEach(async () => {
     // Reset mocks
     jest.clearAllMocks();
-    
+
     // Create a fresh instance for each test
     apiClient = new FirebaseApiClient(FIREBASE_EMULATOR_CONFIG);
   });
