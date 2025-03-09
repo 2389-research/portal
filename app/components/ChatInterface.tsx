@@ -2,10 +2,11 @@
  * Chat interface component for WebRTC chat
  */
 
-import React, { useState, useRef, useEffect } from 'react';
-import { StyleSheet, View, ScrollView, KeyboardAvoidingView, Platform } from 'react-native';
-import { Input, Button, Card, Text, Divider } from '@ui-kitten/components';
-import { ChatMessage } from '../services/chat';
+import { Button, Card, Divider, Input, Text } from '@ui-kitten/components';
+import type React from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, View } from 'react-native';
+import type { ChatMessage } from '../services/chat';
 
 interface ChatInterfaceProps {
   messages: ChatMessage[];

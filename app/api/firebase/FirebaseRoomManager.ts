@@ -3,10 +3,10 @@
  * Handles room creation, joining, and management
  */
 
-import { FirebaseManager } from './FirebaseManager';
-import { RoomResponse, JoinRoomResponse } from '../ApiInterface';
-import { doc, setDoc, getDoc, Timestamp } from 'firebase/firestore';
+import { Timestamp, doc, getDoc, setDoc } from 'firebase/firestore';
 import { createLogger } from '../../services/logger';
+import type { JoinRoomResponse, RoomResponse } from '../ApiInterface';
+import { FirebaseManager } from './FirebaseManager';
 
 export class FirebaseRoomManager extends FirebaseManager {
   protected logger = createLogger('FirebaseRoom');

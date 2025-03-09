@@ -3,8 +3,8 @@
  * Handles WebRTC data channel creation and management
  */
 
-import { WebRTCManager } from '../webrtc';
 import { createLogger } from '../logger';
+import type { WebRTCManager } from '../webrtc';
 
 export interface DataChannelMessage {
   id: string;
@@ -176,7 +176,7 @@ export class DataChannelManager {
   /**
    * Wait for data channel to open (with timeout)
    */
-  public waitForChannelReady(timeoutMs: number = 10000): Promise<boolean> {
+  public waitForChannelReady(timeoutMs = 10000): Promise<boolean> {
     return new Promise((resolve) => {
       if (this.isReady()) {
         this.logger.info('Data channel already open');

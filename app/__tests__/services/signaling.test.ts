@@ -1,5 +1,5 @@
-import { SignalingService, SignalingMessage } from '../../services/signaling';
-import { ApiInterface, JoinRoomResponse, RoomResponse } from '../../api/ApiInterface';
+import type { ApiInterface, JoinRoomResponse, RoomResponse } from '../../api/ApiInterface';
+import { type SignalingMessage, SignalingService } from '../../services/signaling';
 
 // Mock for createLogger
 jest.mock('../../services/logger', () => ({

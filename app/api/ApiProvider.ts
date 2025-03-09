@@ -3,10 +3,10 @@
  * Uses dependency injection instead of singleton pattern for better testability
  */
 
-import { ApiInterface } from './ApiInterface';
+import { createLogger } from '../services/logger';
+import type { ApiInterface } from './ApiInterface';
 import { FirebaseApiClient } from './FirebaseApiClient';
 import { config } from './config';
-import { createLogger } from '../services/logger';
 
 // We only support Firebase
 export type ApiType = 'firebase';

@@ -1,21 +1,21 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { StyleSheet, View, Alert, Clipboard } from 'react-native';
+import { Button, Icon, type IconProps, Layout, Spinner, Text } from '@ui-kitten/components';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { Layout, Text, Button, Icon, IconProps, Spinner } from '@ui-kitten/components';
+import React, { useState, useEffect, useRef } from 'react';
+import { Alert, Clipboard, StyleSheet, View } from 'react-native';
 
+import { ChatInterface } from '../../components/ChatInterface';
+import { DeviceSettings } from '../../components/DeviceSettings';
+import { MediaControls } from '../../components/MediaControls';
 // Import components
 import { VideoGrid } from '../../components/VideoGrid';
-import { ChatInterface } from '../../components/ChatInterface';
-import { MediaControls } from '../../components/MediaControls';
-import { DeviceSettings } from '../../components/DeviceSettings';
 
 // Import services
 import { ApiProvider } from '../../api';
-import { MediaManager } from '../../services/media';
-import { WebRTCManager } from '../../services/webrtc';
-import { SignalingService } from '../../services/signaling';
-import { ChatManager, ChatMessage } from '../../services/chat/index';
+import { ChatManager, type ChatMessage } from '../../services/chat/index';
 import { createLogger } from '../../services/logger';
+import { MediaManager } from '../../services/media';
+import { SignalingService } from '../../services/signaling';
+import { WebRTCManager } from '../../services/webrtc';
 
 // Define interfaces for the component
 interface MediaDevice {
@@ -260,11 +260,7 @@ export default function RoomScreen() {
           apiClient = provider.getApiClient();
           console.log('[Room] API provider type:', provider.getApiType());
 
-          if (!apiClient) {
-            console.warn(
-              '[Room] API client not initialized, proceeding with limited functionality'
-            );
-          } else {
+          if (apiClient) {
             // Check auth status if using Firebase
             if (apiClient.getProviderName() === 'Firebase' && apiClient.getCurrentUser) {
               const user = apiClient.getCurrentUser();
@@ -273,6 +269,10 @@ export default function RoomScreen() {
                 user ? `${user.displayName} (${user.uid})` : 'Not signed in'
               );
             }
+          } else {
+            console.warn(
+              '[Room] API client not initialized, proceeding with limited functionality'
+            );
           }
         } catch (authError) {
           console.error('[Room] Auth error (continuing):', authError);
@@ -297,7 +297,9 @@ export default function RoomScreen() {
 
         // Initialize media (if not skipping)
         let stream = null;
-        if (!skipMediaAccess) {
+        if (skipMediaAccess) {
+          console.log('[Room] Skipping media initialization as requested');
+        } else {
           try {
             console.log('[Room] Media phase: Initializing camera and microphone');
             mediaManager.current = new MediaManager();
@@ -374,8 +376,6 @@ export default function RoomScreen() {
             console.log('[Room] Continuing without media due to error');
             setSkipMediaAccess(true);
           }
-        } else {
-          console.log('[Room] Skipping media initialization as requested');
         }
 
         // Begin signaling phase - this runs whether media succeeded or not

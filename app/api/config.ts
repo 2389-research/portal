@@ -2,7 +2,7 @@
  * API configuration for various backend providers
  */
 
-import { FirebaseOptions } from 'firebase/app';
+import type { FirebaseOptions } from 'firebase/app';
 
 interface ApiConfig {
   firebase: FirebaseOptions;

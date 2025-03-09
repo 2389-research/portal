@@ -2,8 +2,8 @@
  * Mock API Client for testing
  */
 
-import { ApiInterface, RoomResponse, JoinRoomResponse } from './ApiInterface';
-import { SignalingMessage } from '../services/signaling';
+import type { SignalingMessage } from '../services/signaling';
+import type { ApiInterface, JoinRoomResponse, RoomResponse } from './ApiInterface';
 
 interface MockRoom {
   roomId: string;
@@ -143,7 +143,7 @@ export class MockApiClient implements ApiInterface {
   /**
    * Get mock signals
    */
-  public async getSignals(roomId: string, since: number = 0): Promise<SignalingMessage[]> {
+  public async getSignals(roomId: string, since = 0): Promise<SignalingMessage[]> {
     this.ensureConnected();
 
     // Check if room exists

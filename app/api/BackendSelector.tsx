@@ -2,10 +2,11 @@
  * Backend selector component for selecting API backend
  */
 
-import React, { useEffect, useState } from 'react';
-import { StyleSheet, View } from 'react-native';
 import { Button, Card, Radio, RadioGroup, Text } from '@ui-kitten/components';
-import { ApiProvider, ApiType } from '.';
+import type React from 'react';
+import { useEffect, useState } from 'react';
+import { StyleSheet, View } from 'react-native';
+import type { ApiProvider, ApiType } from '.';
 import { createLogger } from '../services/logger';
 
 interface BackendSelectorProps {

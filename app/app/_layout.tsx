@@ -1,13 +1,13 @@
-import React, { useEffect, useState } from 'react';
-import { Stack } from 'expo-router';
 import * as eva from '@eva-design/eva';
+import { ApplicationProvider, IconRegistry, Layout, Spinner } from '@ui-kitten/components';
 import { EvaIconsPack } from '@ui-kitten/eva-icons';
-import { ApplicationProvider, IconRegistry, Spinner, Layout } from '@ui-kitten/components';
-import { theme } from '../theme';
-import { ApiProvider } from '../api';
+import { Stack } from 'expo-router';
+import React, { useEffect, useState } from 'react';
 import { Text } from 'react-native';
+import { ApiProvider } from '../api';
 import { createLogger } from '../services/logger';
 import { initializeLogging } from '../services/logger-config';
+import { theme } from '../theme';
 
 export default function RootLayout() {
   const [initializing, setInitializing] = useState(true);

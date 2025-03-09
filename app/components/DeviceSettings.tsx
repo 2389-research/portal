@@ -2,9 +2,10 @@
  * Device settings modal for WebRTC video chat
  */
 
-import React, { useState, useEffect } from 'react';
-import { StyleSheet, View, Modal, TouchableWithoutFeedback } from 'react-native';
-import { Button, Card, Select, SelectItem, Text, IndexPath } from '@ui-kitten/components';
+import { Button, Card, IndexPath, Select, SelectItem, Text } from '@ui-kitten/components';
+import type React from 'react';
+import { useEffect, useState } from 'react';
+import { Modal, StyleSheet, TouchableWithoutFeedback, View } from 'react-native';
 
 interface MediaDevice {
   deviceId: string;
