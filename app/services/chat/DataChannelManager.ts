@@ -17,6 +17,7 @@ export class DataChannelManager {
   private dataChannel: RTCDataChannel | null = null;
   private webrtcManager: WebRTCManager;
   private onMessageCallback: ((message: DataChannelMessage) => void) | null = null;
+  private onReadyStateChangeCallbacks: ((isReady: boolean) => void)[] = [];
   private logger = createLogger('DataChannel');
 
   constructor(webrtcManager: WebRTCManager) {
@@ -112,18 +113,43 @@ export class DataChannelManager {
 
     this.dataChannel.onopen = () => {
       this.logger.info('Data channel opened. Channel state:', this.dataChannel?.readyState);
+      // Notify all ready state change listeners
+      this.notifyReadyStateChange(true);
     };
 
     this.dataChannel.onclose = () => {
       this.logger.info('Data channel closed. Channel state:', this.dataChannel?.readyState);
+      // Notify all ready state change listeners
+      this.notifyReadyStateChange(false);
     };
 
     this.dataChannel.onerror = (error) => {
       this.logger.error('Data channel error:', error);
+      // Notify listeners on error, assuming channel might not be usable
+      this.notifyReadyStateChange(false);
     };
 
     // Log the current state
     this.logger.info('Data channel initial state:', this.dataChannel.readyState);
+    
+    // Notify about initial state in case it's already open
+    if (this.dataChannel.readyState === 'open') {
+      this.notifyReadyStateChange(true);
+    }
+  }
+  
+  /**
+   * Notify all ready state change listeners
+   */
+  private notifyReadyStateChange(isReady: boolean): void {
+    this.logger.info('Notifying ready state change listeners, isReady:', isReady);
+    for (const callback of this.onReadyStateChangeCallbacks) {
+      try {
+        callback(isReady);
+      } catch (error) {
+        this.logger.error('Error in ready state change callback:', error);
+      }
+    }
   }
 
   /**
@@ -161,6 +187,26 @@ export class DataChannelManager {
    */
   public onMessage(callback: (message: DataChannelMessage) => void): void {
     this.onMessageCallback = callback;
+  }
+  
+  /**
+   * Register a callback to be notified when the data channel ready state changes
+   */
+  public onReadyStateChange(callback: (isReady: boolean) => void): () => void {
+    this.onReadyStateChangeCallbacks.push(callback);
+    
+    // If we already have a data channel, immediately notify with current state
+    if (this.dataChannel) {
+      const isReady = this.dataChannel.readyState === 'open';
+      setTimeout(() => callback(isReady), 0);
+    }
+    
+    // Return a function to unregister this callback
+    return () => {
+      this.onReadyStateChangeCallbacks = this.onReadyStateChangeCallbacks.filter(
+        (cb) => cb !== callback
+      );
+    };
   }
 
   /**
@@ -231,6 +277,11 @@ export class DataChannelManager {
     if (this.dataChannel) {
       this.dataChannel.close();
       this.dataChannel = null;
+      // Notify listeners that the channel is closed
+      this.notifyReadyStateChange(false);
     }
+    
+    // Clear all callbacks as part of cleanup
+    this.onMessageCallback = null;
   }
 }

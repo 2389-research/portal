@@ -100,28 +100,23 @@ export function useChat(
 
     initChat();
 
-    // Set up a periodic check for chat data channel status
-    const intervalId = setInterval(() => {
-      if (chatManagerRef.current) {
-        const isChannelReady = chatManagerRef.current.isReady();
-
-        // If UI state doesn't match reality, update it
-        if (chatReady !== isChannelReady) {
-          logger.info('Chat ready state mismatch detected, updating UI state', {
+    // Set up a data channel state listener 
+    if (chatManagerRef.current) {
+      // Subscribe to ready state changes
+      chatManagerRef.current.onReadyStateChange((isReady) => {
+        if (chatReady !== isReady) {
+          logger.info('Chat ready state changed, updating UI state', {
             uiReady: chatReady,
-            actualReady: isChannelReady,
+            actualReady: isReady,
           });
-          setChatReady(isChannelReady);
+          setChatReady(isReady);
+          setLastChatCheck(Date.now());
         }
-
-        setLastChatCheck(Date.now());
-      }
-    }, 5000);
+      });
+    }
 
     // Cleanup on unmount
     return () => {
-      clearInterval(intervalId);
-
       if (chatManagerRef.current) {
         logger.info('Disposing chat manager');
         chatManagerRef.current.dispose();
