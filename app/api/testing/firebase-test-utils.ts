@@ -17,8 +17,6 @@ export class MockFirebaseApiClient implements ApiInterface {
   private connected: boolean = false;
   private mockUser: UserInfo | null = null;
 
-  constructor() {}
-
   public async connect(): Promise<void> {
     this.connected = true;
   }

@@ -1,7 +1,7 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { StyleSheet, View, Alert, Clipboard, TouchableOpacity } from 'react-native';
-import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
-import { Layout, Text, Card, Button, Icon, IconProps, Spinner } from '@ui-kitten/components';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { StyleSheet, View, Alert, Clipboard } from 'react-native';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import { Layout, Text, Button, Icon, IconProps, Spinner } from '@ui-kitten/components';
 
 // Import components
 import { VideoGrid } from '../../components/VideoGrid';
@@ -26,8 +26,8 @@ export default function RoomScreen() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [connected, setConnected] = useState(false);
-  const [userId, setUserId] = useState<string | null>(null);
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [_userId, setUserId] = useState<string | null>(null); // Prefixed with _ to indicate currently unused
+  const [_isAuthenticated, setIsAuthenticated] = useState(false); // Prefixed with _ to indicate currently unused
   const [initPhase, setInitPhase] = useState<'auth' | 'media' | 'webrtc' | 'signaling' | 'chat' | 'complete'>('auth');
 
   // State for media controls
@@ -50,7 +50,7 @@ export default function RoomScreen() {
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [chatReady, setChatReady] = useState(false);
   const [isChatVisible, setIsChatVisible] = useState(false);
-  const [lastChatCheck, setLastChatCheck] = useState(0); // To track periodic checks
+  const [_lastChatCheck, setLastChatCheck] = useState(0); // To track periodic checks (currently unused)
 
   // Service references
   const mediaManager = useRef<MediaManager | null>(null);
@@ -272,7 +272,7 @@ export default function RoomScreen() {
             const deviceEnumPromise = (async () => {
               console.log('[Room] Enumerating media devices in background');
               try {
-                const devices = await mediaManager.current!.enumerateDevices();
+                await mediaManager.current!.enumerateDevices();
                 setAudioInputDevices(mediaManager.current!.getAudioInputDevices());
                 setVideoInputDevices(mediaManager.current!.getVideoInputDevices());
                 setAudioOutputDevices(mediaManager.current!.getAudioOutputDevices());
@@ -500,7 +500,7 @@ export default function RoomScreen() {
         }
       })();
     };
-  }, [roomId]);
+  }, [roomId, initPhase, loading, logger, skipMediaAccess, cleanup]);
 
   // Setup signaling handlers for WebRTC
   const setupSignalingHandlers = () => {
@@ -701,8 +701,8 @@ export default function RoomScreen() {
     router.replace('/');
   };
 
-  // Cleanup resources
-  const cleanup = async () => {
+  // Cleanup resources - wrapped in useCallback to avoid dependency issues
+  const cleanup = useCallback(async () => {
     console.log('[Room] Starting cleanup...');
     
     // Reset states first to avoid any component updates during cleanup
@@ -770,7 +770,15 @@ export default function RoomScreen() {
     setUserId(null);
     
     console.log('[Room] Cleanup complete');
-  };
+  }, [
+    setRemoteStreams, 
+    setChatMessages, 
+    setChatReady, 
+    setLocalStream, 
+    setScreenShareStream, 
+    setUserId,
+    screenShareStream
+  ]);
 
   // Copy room ID to clipboard
   const copyRoomId = () => {
@@ -871,7 +879,7 @@ export default function RoomScreen() {
         ]
       );
     }
-  }, [mediaError]);
+  }, [mediaError, roomId, router, skipMediaAccess]);
 
   if (loading) {
     // Get loading message based on current phase

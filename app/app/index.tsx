@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { StyleSheet, View, Alert, Platform } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import { Card, Text, Input, Button, Divider, Spinner, Layout } from '@ui-kitten/components';
 import { useRouter } from 'expo-router';
 import { ApiProvider } from '../api';
@@ -39,7 +39,7 @@ export default function HomeScreen() {
     };
 
     checkAuthState();
-  }, []);
+  }, [logger]);
 
   // Create a new room
   const handleCreateRoom = async () => {

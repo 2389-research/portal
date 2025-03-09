@@ -82,7 +82,7 @@ export const VideoContainer: React.FC<VideoContainerProps> = (props) => {
   try {
     const NativeVideoContainer = require('./platform/NativeVideoContainer').NativeVideoContainer;
     return <NativeVideoContainer {...props} />;
-  } catch (e) {
+  } catch {
     return <NativeImplementation {...props} />;
   }
 };

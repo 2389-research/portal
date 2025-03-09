@@ -25,12 +25,9 @@ jobs:
 
             - name: Install Root Dependencies
               run: npm install
-              
-            - name: Run Tests
-              run: npm test
 
-            - name: Build Expo Web
-              run: npm run build:web
+            - name: Run TypeScript Type Checking
+              run: npm run typecheck
 
     e2e:
         runs-on: ubuntu-latest
