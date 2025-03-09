@@ -30,21 +30,33 @@ export class DataChannelManager {
     this.logger.info('Initializing data channel, isInitiator:', isInitiator);
 
     if (isInitiator) {
-      // Create data channel as the initiator
-      this.logger.info('Creating data channel as initiator');
-      this.dataChannel = this.webrtcManager.createDataChannel('chat');
+      try {
+        // Create data channel as the initiator
+        this.logger.info('Creating data channel as initiator');
+        
+        // Make sure webrtcManager is properly initialized
+        if (!this.webrtcManager) {
+          this.logger.error('WebRTC manager is not available');
+          return false;
+        }
+        
+        this.dataChannel = this.webrtcManager.createDataChannel('chat');
 
-      if (!this.dataChannel) {
-        this.logger.error('Failed to create data channel');
+        if (!this.dataChannel) {
+          this.logger.error('Failed to create data channel');
+          return false;
+        }
+
+        this.setupDataChannel();
+
+        // Wait for the channel to be ready
+        const ready = await this.waitForChannelReady(15000);
+        this.logger.info('Data channel ready state after initialization:', ready);
+        return ready;
+      } catch (error) {
+        this.logger.error('Error creating data channel:', error);
         return false;
       }
-
-      this.setupDataChannel();
-
-      // Wait for the channel to be ready
-      const ready = await this.waitForChannelReady(15000);
-      this.logger.info('Data channel ready state after initialization:', ready);
-      return ready;
     }
     // Create a promise that will resolve when the data channel is ready
     return new Promise((resolve) => {

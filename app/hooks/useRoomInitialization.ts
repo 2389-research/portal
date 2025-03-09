@@ -134,14 +134,18 @@ export function useRoomInitialization(
     },
   });
 
-  // Chat hook (depends on signaling.userId and webrtc.webrtcManager)
-  const chat = useChat(signaling.userId, webrtc.webrtcManager, {
-    onChatError: (error) => {
-      logger.warn('Chat error, but continuing:', error);
-      // Non-fatal, just move to completion
-      moveToPhase('complete');
-    },
-  });
+  // We need to make sure we only pass webrtcManager when it's initialized
+  const chat = useChat(
+    signaling.userId, 
+    webrtc.isInitialized ? webrtc.webrtcManager : null, 
+    {
+      onChatError: (error) => {
+        logger.warn('Chat error, but continuing:', error);
+        // Non-fatal, just move to completion
+        moveToPhase('complete');
+      },
+    }
+  );
 
   // Move to the next initialization phase
   const moveToPhase = useCallback((phase: InitPhase) => {

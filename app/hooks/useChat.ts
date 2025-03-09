@@ -31,15 +31,37 @@ export function useChat(
   // Initialize chat when webrtcManager and userId are available
   useEffect(() => {
     if (!userId || !webrtcManager) {
+      // Reset chat state when dependencies are not available
+      if (chatManagerRef.current) {
+        logger.info('Dependencies not available, cleaning up chat manager');
+        chatManagerRef.current.dispose();
+        chatManagerRef.current = null;
+        setChatReady(false);
+      }
       return;
     }
 
     const initChat = async () => {
       try {
+        // Ensure webrtcManager is not null and check its state 
+        if (!webrtcManager) {
+          throw new Error('WebRTC manager is not available');
+        }
+
         logger.info('Initializing chat manager');
+        
+        // Dispose of existing chat manager if any
+        if (chatManagerRef.current) {
+          logger.info('Disposing previous chat manager');
+          chatManagerRef.current.dispose();
+          chatManagerRef.current = null;
+        }
+        
+        // Create new chat manager
         chatManagerRef.current = new ChatManager(userId, webrtcManager);
 
         // Initialize as initiator
+        logger.info('Attempting to initialize chat data channel');
         const chatInitialized = await chatManagerRef.current.initialize(true);
         logger.info('Chat initialization result:', chatInitialized);
         
