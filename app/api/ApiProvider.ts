@@ -29,7 +29,7 @@ export class ApiProvider {
   constructor(initialApiType?: ApiType) {
     if (initialApiType) {
       // Don't await here - let the caller handle initialization
-      this.initialize(initialApiType).catch(err => {
+      this.initialize(initialApiType).catch((err) => {
         this.logger.error('Failed to initialize API client', err);
       });
     }
@@ -40,7 +40,7 @@ export class ApiProvider {
    */
   public async initialize(type: ApiType = 'firebase'): Promise<ApiInterface> {
     this.logger.info(`Initializing API client of type: ${type}`);
-    
+
     // If we already have a client of this type, return it
     if (this.apiClient && this.apiType === type) {
       this.logger.info('Reusing existing API client');

@@ -13,14 +13,14 @@ const LogConfig = {
     debug: process.env.NODE_ENV !== 'production',
     info: true,
     warn: true,
-    error: true
-  }
+    error: true,
+  },
 };
 
 export class Logger {
   private context: string;
   private enabled: boolean = LogConfig.enabled;
-  
+
   constructor(context: string) {
     this.context = context;
   }
@@ -83,11 +83,11 @@ export function configureLogging(options: {
   if (typeof options.enabled === 'boolean') {
     LogConfig.enabled = options.enabled;
   }
-  
+
   if (options.levels) {
     LogConfig.enabledLevels = {
       ...LogConfig.enabledLevels,
-      ...options.levels
+      ...options.levels,
     };
   }
 }

@@ -56,10 +56,10 @@ export const videoStyles = StyleSheet.create({
 // Dynamically import platform implementations to avoid circular dependencies
 export const VideoContainer: React.FC<VideoContainerProps> = (props) => {
   // Native implementation fallback
-  const NativeImplementation: React.FC<VideoContainerProps> = ({ 
-    label = '', 
+  const NativeImplementation: React.FC<VideoContainerProps> = ({
+    label = '',
     isLocal = false,
-    isScreenShare = false 
+    isScreenShare = false,
   }) => (
     <View style={[videoStyles.container, isScreenShare && videoStyles.screenShare]}>
       <View style={videoStyles.placeholderVideo}>

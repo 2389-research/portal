@@ -12,7 +12,7 @@ export interface SignalingMessage {
   receiver?: string;
   roomId: string;
   data: any;
-  timestamp?: number;  // Add timestamp property
+  timestamp?: number; // Add timestamp property
 }
 
 export class SignalingService {
@@ -39,7 +39,7 @@ export class SignalingService {
         this.logger.error('Invalid room ID:', roomId);
         throw new Error('Room ID is required');
       }
-      
+
       this.logger.info('Joining room via API:', roomId);
 
       // Join the room via API
@@ -89,11 +89,17 @@ export class SignalingService {
   /**
    * Send a signaling message
    */
-  public async sendMessage(type: string, data: any, receiver?: string, forceRoomId?: string, forceSenderId?: string): Promise<void> {
+  public async sendMessage(
+    type: string,
+    data: any,
+    receiver?: string,
+    forceRoomId?: string,
+    forceSenderId?: string
+  ): Promise<void> {
     // Allow force sending with specific room and user IDs (used when leaving a room)
     const roomId = forceRoomId || this.roomId;
     const userId = forceSenderId || this.userId;
-    
+
     if (!roomId || !userId) {
       this.logger.error('Cannot send message, not connected to a room');
       throw new Error('Not connected to a room');
@@ -104,7 +110,7 @@ export class SignalingService {
       sender: userId,
       roomId: roomId,
       data,
-      timestamp: Date.now() // Add timestamp to outgoing messages
+      timestamp: Date.now(), // Add timestamp to outgoing messages
     };
 
     if (receiver) {
@@ -154,17 +160,17 @@ export class SignalingService {
    */
   private stopPolling(): void {
     this.logger.info('Stopping polling. Current polling state:', this.isPolling);
-    
+
     // Always try to clear the interval, even if isPolling is false
     if (this.pollingInterval) {
       this.logger.info('Clearing polling interval');
       clearInterval(this.pollingInterval);
       this.pollingInterval = null;
     }
-    
+
     // Reset the polling state
     this.isPolling = false;
-    
+
     this.logger.info('Polling stopped');
   }
 
@@ -178,7 +184,10 @@ export class SignalingService {
     }
 
     try {
-      this.logger.debug('Polling for messages since:', new Date(this.lastMessageTime).toISOString());
+      this.logger.debug(
+        'Polling for messages since:',
+        new Date(this.lastMessageTime).toISOString()
+      );
       const messages = await this.apiClient.getSignals(this.roomId, this.lastMessageTime);
 
       // Log the activity even if no messages
@@ -186,14 +195,17 @@ export class SignalingService {
         this.logger.debug('No new messages');
         return;
       }
-      
+
       this.logger.info(`Received ${messages.length} new messages`);
-      
+
       // Get the latest timestamp from all messages
-      const timestamps = messages.map(m => m.timestamp || 0).filter(t => t > 0);
+      const timestamps = messages.map((m) => m.timestamp || 0).filter((t) => t > 0);
       if (timestamps.length > 0) {
         this.lastMessageTime = Math.max(...timestamps);
-        this.logger.debug('Updated lastMessageTime to:', new Date(this.lastMessageTime).toISOString());
+        this.logger.debug(
+          'Updated lastMessageTime to:',
+          new Date(this.lastMessageTime).toISOString()
+        );
       }
 
       // Process messages
@@ -233,10 +245,10 @@ export class SignalingService {
    */
   public async leaveRoom(): Promise<void> {
     this.logger.info('Leaving room, roomId:', this.roomId, 'userId:', this.userId);
-    
+
     // Always stop polling, even if not in a room
     this.stopPolling();
-    
+
     if (!this.roomId || !this.userId) {
       this.logger.info('Not connected to a room, nothing to leave');
       return;
@@ -246,15 +258,21 @@ export class SignalingService {
       // Save room and user ID for API calls
       const roomIdToLeave = this.roomId;
       const userIdToLeave = this.userId;
-      
+
       // Clear state immediately to prevent any more polling
       this.roomId = null;
       this.userId = null;
-      
+
       // Notify other users that we're leaving
       this.logger.info('Sending user-left message');
       try {
-        await this.sendMessage('user-left', { userId: userIdToLeave }, undefined, roomIdToLeave, userIdToLeave);
+        await this.sendMessage(
+          'user-left',
+          { userId: userIdToLeave },
+          undefined,
+          roomIdToLeave,
+          userIdToLeave
+        );
       } catch (sendError) {
         this.logger.error('Error sending leave message:', sendError);
         // Continue with leaving even if the message fails
@@ -263,14 +281,14 @@ export class SignalingService {
       // Leave the room via API
       this.logger.info('Calling API leaveRoom');
       await this.apiClient.leaveRoom(roomIdToLeave, userIdToLeave);
-      
+
       // Clear all handlers
       this.messageHandlers.clear();
-      
+
       this.logger.info('Successfully left room');
     } catch (error) {
       this.logger.error('Error leaving room:', error);
-      
+
       // Make sure state is reset even on error
       this.roomId = null;
       this.userId = null;

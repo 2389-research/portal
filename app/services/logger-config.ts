@@ -9,18 +9,18 @@ import { configureLogging } from './logger';
  */
 export function initializeLogging(): void {
   const isDevelopment = process.env.NODE_ENV !== 'production';
-  
+
   // Configure logging based on environment
   configureLogging({
     enabled: true, // Always enable logging at the global level, but control verbosity
     levels: {
       debug: isDevelopment, // Only show debug logs in development
-      info: true,           // Always show info logs
-      warn: true,           // Always show warning logs
-      error: true           // Always show error logs
-    }
+      info: true, // Always show info logs
+      warn: true, // Always show warning logs
+      error: true, // Always show error logs
+    },
   });
-  
+
   // Log the configuration
   if (isDevelopment) {
     console.log(`[Logger] Initialized in ${isDevelopment ? 'development' : 'production'} mode`);

@@ -38,11 +38,11 @@ jest.mock('firebase/firestore', () => ({
 }));
 
 // Create mock user and firestore document response
-const mockUser = { 
-  uid: 'user123', 
-  displayName: 'Test User', 
+const mockUser = {
+  uid: 'user123',
+  displayName: 'Test User',
   email: 'test@example.com',
-  photoURL: null
+  photoURL: null,
 };
 
 describe('FirebaseApiClient', () => {
@@ -91,7 +91,7 @@ describe('FirebaseApiClient', () => {
       automaticDataCollectionEnabled: false,
       delete: jest.fn(),
     } as any;
-    
+
     const mockDb = {
       type: 'firestore',
       app: mockApp,
@@ -113,7 +113,7 @@ describe('FirebaseApiClient', () => {
   test('implements the ApiInterface', () => {
     expect(firebaseClient).toBeDefined();
     expect(firebaseClient.getProviderName()).toBe('Firebase');
-    
+
     // Verify that all required methods exist
     expect(typeof firebaseClient.connect).toBe('function');
     expect(typeof firebaseClient.disconnect).toBe('function');
@@ -127,18 +127,18 @@ describe('FirebaseApiClient', () => {
     expect(typeof firebaseClient.getCurrentUser).toBe('function');
     expect(typeof firebaseClient.isSignedIn).toBe('function');
     expect(typeof firebaseClient.onAuthStateChanged).toBe('function');
-    
+
     // Verify accessor methods are available
     expect(typeof firebaseClient.getApp).toBe('function');
     expect(typeof firebaseClient.getDb).toBe('function');
     expect(typeof firebaseClient.getFirebaseUser).toBe('function');
   });
-  
+
   // Test the main interface methods using the mock implementation
   test('MockFirebaseApiClient implements the same interface and provides test functionality', async () => {
     await mockApiClient.connect();
     expect(mockApiClient.isConnected()).toBe(true);
-    
+
     // Room operations
     const room = await mockApiClient.createRoom();
     expect(room).toEqual(
@@ -148,15 +148,15 @@ describe('FirebaseApiClient', () => {
         created: expect.any(Number),
       })
     );
-    
+
     // Authentication operations
     // Should be initially signed out
     expect(mockApiClient.isSignedIn()).toBe(false);
-    
+
     // Sign in
     await mockApiClient.signInWithGoogle();
     expect(mockApiClient.isSignedIn()).toBe(true);
-    
+
     // Get current user
     const user = mockApiClient.getCurrentUser();
     expect(user).toEqual(
@@ -166,7 +166,7 @@ describe('FirebaseApiClient', () => {
         email: expect.any(String),
       })
     );
-    
+
     // Sign out
     await mockApiClient.signOut();
     expect(mockApiClient.isSignedIn()).toBe(false);

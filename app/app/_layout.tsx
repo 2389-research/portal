@@ -18,7 +18,7 @@ export default function RootLayout() {
       // Initialize logging first
       initializeLogging();
       const logger = createLogger('App');
-      
+
       try {
         // Initialize Firebase
         logger.info('Initializing Firebase on app start');

@@ -34,14 +34,14 @@ export class FirebaseApiClient implements ApiInterface {
   public async connect(): Promise<void> {
     try {
       this.logger.info('Connecting to Firebase services');
-      
+
       // Connect all managers in parallel for better performance
       await Promise.all([
         this.authManager.connect(),
         this.roomManager.connect(),
         this.signalingManager.connect(),
       ]);
-      
+
       this.logger.info('All Firebase services connected');
     } catch (error) {
       this.logger.error('Error connecting to Firebase:', error);
@@ -55,14 +55,14 @@ export class FirebaseApiClient implements ApiInterface {
   public async disconnect(): Promise<void> {
     try {
       this.logger.info('Disconnecting from Firebase services');
-      
+
       // Disconnect all managers in parallel
       await Promise.all([
         this.authManager.disconnect(),
         this.roomManager.disconnect(),
         this.signalingManager.disconnect(),
       ]);
-      
+
       this.logger.info('All Firebase services disconnected');
     } catch (error) {
       this.logger.error('Error disconnecting from Firebase:', error);
@@ -77,7 +77,7 @@ export class FirebaseApiClient implements ApiInterface {
     try {
       // Get current user ID from auth manager
       const userId = this.authManager.getUserId();
-      
+
       // Use room manager to create the room
       return await this.roomManager.createRoom(userId);
     } catch (error) {
@@ -93,7 +93,7 @@ export class FirebaseApiClient implements ApiInterface {
     try {
       // Get current user ID from auth manager
       const userId = this.authManager.getUserId();
-      
+
       // Use room manager to join the room
       return await this.roomManager.joinRoom(roomId, userId);
     } catch (error) {
