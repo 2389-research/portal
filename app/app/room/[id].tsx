@@ -473,13 +473,10 @@ export default function RoomScreen() {
         // Quick test of permissions - just check if permissions are accessible
         try {
           console.log('[Room] Requesting permission status...');
-          // @ts-ignore - Permissions API may not be available in all browsers
           if (navigator.permissions?.query) {
-            // @ts-ignore
             const cameraPermission = await navigator.permissions.query({ name: 'camera' });
             console.log('[Room] Camera permission status:', cameraPermission.state);
 
-            // @ts-ignore
             const micPermission = await navigator.permissions.query({ name: 'microphone' });
             console.log('[Room] Microphone permission status:', micPermission.state);
 
