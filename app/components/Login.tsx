@@ -3,7 +3,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { StyleSheet, View, Image } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import { Button, Card, Text, Avatar, Spinner } from '@ui-kitten/components';
 import { UserInfo } from '../api/ApiInterface';
 import { ApiProvider } from '../api';
@@ -66,7 +66,7 @@ export const Login: React.FC<LoginProps> = ({ onLoginStateChange }) => {
     };
 
     initializeAuth();
-  }, []);
+  }, [onLoginStateChange]);
 
   const handleSignIn = async () => {
     setLoading(true);

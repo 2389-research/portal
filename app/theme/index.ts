@@ -1,5 +1,4 @@
 // Custom theme based on the current Tailwind design
-import { DefaultTheme } from '@ui-kitten/components';
 
 export const theme = {
   // Main colors matching Tailwind classes from the original app

@@ -30,11 +30,10 @@ export const BackendSelector: React.FC<BackendSelectorProps> = ({
   const [selectedIndex, setSelectedIndex] = useState(getInitialIndex());
   const [apiType, setApiType] = useState<ApiType>(initialType);
 
-  // API type options
-  const apiTypes: ApiType[] = ['firebase'];
-
   // Map numerical index to API type
   useEffect(() => {
+    // API type options defined inside useEffect to avoid dependency warnings
+    const apiTypes: ApiType[] = ['firebase'];
     const newApiType = apiTypes[selectedIndex];
     setApiType(newApiType);
   }, [selectedIndex]);

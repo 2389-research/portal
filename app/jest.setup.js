@@ -1,4 +1,5 @@
 // Add global Jest configurations and mocks here
+/* eslint-disable no-undef */
 
 // Mock Expo async storage
 jest.mock('@react-native-async-storage/async-storage', () =>

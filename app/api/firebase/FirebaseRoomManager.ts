@@ -6,7 +6,6 @@
 import { FirebaseManager } from './FirebaseManager';
 import { RoomResponse, JoinRoomResponse } from '../ApiInterface';
 import {
-  collection,
   doc,
   setDoc,
   getDoc,

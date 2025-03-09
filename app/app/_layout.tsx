@@ -5,7 +5,7 @@ import { EvaIconsPack } from '@ui-kitten/eva-icons';
 import { ApplicationProvider, IconRegistry, Spinner, Layout } from '@ui-kitten/components';
 import { theme } from '../theme';
 import { ApiProvider } from '../api';
-import { View, Text } from 'react-native';
+import { Text } from 'react-native';
 import { createLogger } from '../services/logger';
 import { initializeLogging } from '../services/logger-config';
 

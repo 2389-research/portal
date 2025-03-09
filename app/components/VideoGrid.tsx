@@ -17,7 +17,7 @@ export const VideoGrid: React.FC<VideoGridProps> = ({
   remoteStreams,
   screenShareStream = null,
 }) => {
-  const { width } = useWindowDimensions();
+  useWindowDimensions(); // Used for future responsive design needs
   const streams = Array.from(remoteStreams.entries());
   const totalParticipants = streams.length + 1; // +1 for local stream
 
@@ -53,7 +53,7 @@ export const VideoGrid: React.FC<VideoGridProps> = ({
 
   // Calculate video container dimensions based on grid layout
   const getContainerStyle = (index: number) => {
-    const { columns, rows } = layout;
+    const { columns } = layout;
 
     // In screen share mode, render differently
     if (isScreenShareMode && index === 0 && screenShareStream) {
