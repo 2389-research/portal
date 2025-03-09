@@ -1,5 +1,6 @@
 module.exports = {
   preset: 'jest-expo',
+  testEnvironment: 'jsdom',
   transformIgnorePatterns: [
     'node_modules/(?!(firebase|@firebase|jest-)?react-native|@react-native(-community)?|expo(nent)?|@expo(nent)?/.*|@expo-google-fonts/.*|react-navigation|@react-navigation/.*|@unimodules/.*|unimodules|sentry-expo|native-base|react-native-svg|@ui-kitten/components)',
   ],
@@ -7,6 +8,7 @@ module.exports = {
     'api/**/*.{ts,tsx}',
     'components/**/*.{ts,tsx}',
     'services/**/*.{ts,tsx}',
+    'hooks/**/*.{ts,tsx}',
     '!**/*.d.ts',
     '!**/node_modules/**',
   ],
