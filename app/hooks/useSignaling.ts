@@ -187,14 +187,14 @@ export function useSignaling(
 
   // Send a message
   const sendMessage = useCallback(
-    async (type: string, data: any, recipient?: string) => {
+    async (type: string, data: any, recipient?: string, forceRoomId?: string, forceSenderId?: string, extraFields?: Record<string, any>) => {
       if (!signalingServiceRef.current || !connected) {
         logger.warn('Cannot send message: Not connected to room');
         return false;
       }
 
       try {
-        await signalingServiceRef.current.sendMessage(type, data, recipient);
+        await signalingServiceRef.current.sendMessage(type, data, recipient, forceRoomId, forceSenderId, extraFields);
         return true;
       } catch (error) {
         logger.error('Error sending message:', error);

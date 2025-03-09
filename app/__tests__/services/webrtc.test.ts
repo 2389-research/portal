@@ -197,8 +197,11 @@ describe('WebRTCManager', () => {
       const mockIceCandidate = { candidate: 'mock-candidate' };
       mockPeerConnection.onicecandidate?.({ candidate: mockIceCandidate } as any);
 
-      // Verify callback was called with the candidate
-      expect(mockIceCandidateCallback).toHaveBeenCalledWith(mockIceCandidate);
+      // Verify callback was called with the candidate and a connection ID
+      expect(mockIceCandidateCallback).toHaveBeenCalledWith(
+        mockIceCandidate,
+        expect.any(String) // The connection ID should be a string
+      );
     });
 
     test('should add ICE candidate to peer connection', async () => {
@@ -207,9 +210,10 @@ describe('WebRTCManager', () => {
       // Initialize
       await webrtcManager.initialize(mockLocalStream as unknown as MediaStream);
 
-      // Add ICE candidate
+      // Add ICE candidate with a connection ID
       const mockIceCandidate = { candidate: 'mock-candidate' } as unknown as RTCIceCandidate;
-      await webrtcManager.addIceCandidate(mockIceCandidate);
+      const connectionId = 'test-connection-id';
+      await webrtcManager.addIceCandidate(mockIceCandidate, connectionId);
 
       // Verify addIceCandidate was called
       expect(mockPeerConnection.addIceCandidate).toHaveBeenCalledWith(mockIceCandidate);
@@ -220,7 +224,8 @@ describe('WebRTCManager', () => {
 
       // Try to add ICE candidate
       const mockIceCandidate = { candidate: 'mock-candidate' } as unknown as RTCIceCandidate;
-      await expect(webrtcManager.addIceCandidate(mockIceCandidate)).rejects.toThrow(
+      const connectionId = 'test-connection-id';
+      await expect(webrtcManager.addIceCandidate(mockIceCandidate, connectionId)).rejects.toThrow(
         'Peer connection not initialized'
       );
     });
@@ -430,7 +435,7 @@ describe('WebRTCManager', () => {
       await webrtcManager.initialize(mockLocalStream as unknown as MediaStream);
 
       // Create offer
-      const offer = await webrtcManager.createOffer();
+      const result = await webrtcManager.createOffer();
 
       // Verify createOffer was called
       expect(mockPeerConnection.createOffer).toHaveBeenCalled();
@@ -441,8 +446,11 @@ describe('WebRTCManager', () => {
         sdp: 'mock-sdp',
       });
 
-      // Verify returned offer
-      expect(offer).toEqual({ type: 'offer', sdp: 'mock-sdp' });
+      // Verify returned offer has offer and connectionId properties
+      expect(result).toHaveProperty('offer');
+      expect(result).toHaveProperty('connectionId');
+      expect(result.offer).toEqual({ type: 'offer', sdp: 'mock-sdp' });
+      expect(typeof result.connectionId).toBe('string');
     });
 
     test('should throw when creating offer with uninitialized connection', async () => {
@@ -458,9 +466,10 @@ describe('WebRTCManager', () => {
       // Initialize
       await webrtcManager.initialize(mockLocalStream as unknown as MediaStream);
 
-      // Process offer
+      // Process offer with connection ID
       const offer = { type: 'offer', sdp: 'remote-sdp' };
-      const answer = await webrtcManager.processOffer(offer);
+      const connectionId = 'test-connection-id';
+      const result = await webrtcManager.processOffer(offer, connectionId);
 
       // Verify setRemoteDescription was called with the offer
       expect(mockPeerConnection.setRemoteDescription).toHaveBeenCalled();
@@ -474,16 +483,20 @@ describe('WebRTCManager', () => {
         sdp: 'mock-sdp',
       });
 
-      // Verify returned answer
-      expect(answer).toEqual({ type: 'answer', sdp: 'mock-sdp' });
+      // Verify returned answer and connection ID
+      expect(result).toEqual({ 
+        answer: { type: 'answer', sdp: 'mock-sdp' },
+        connectionId: connectionId
+      });
     });
 
     test('should throw when processing offer with uninitialized connection', async () => {
       // Don't initialize
 
-      // Try to process offer
+      // Try to process offer with connection ID
       const offer = { type: 'offer', sdp: 'remote-sdp' };
-      await expect(webrtcManager.processOffer(offer)).rejects.toThrow(
+      const connectionId = 'test-connection-id';
+      await expect(webrtcManager.processOffer(offer, connectionId)).rejects.toThrow(
         'Peer connection not initialized'
       );
     });
@@ -494,9 +507,10 @@ describe('WebRTCManager', () => {
       // Initialize
       await webrtcManager.initialize(mockLocalStream as unknown as MediaStream);
 
-      // Process answer
+      // Process answer with connection ID
       const answer = { type: 'answer', sdp: 'remote-sdp' };
-      await webrtcManager.processAnswer(answer);
+      const connectionId = 'test-connection-id';
+      await webrtcManager.processAnswer(answer, connectionId);
 
       // Verify setRemoteDescription was called with the answer
       expect(mockPeerConnection.setRemoteDescription).toHaveBeenCalled();
@@ -505,9 +519,10 @@ describe('WebRTCManager', () => {
     test('should throw when processing answer with uninitialized connection', async () => {
       // Don't initialize
 
-      // Try to process answer
+      // Try to process answer with connection ID
       const answer = { type: 'answer', sdp: 'remote-sdp' };
-      await expect(webrtcManager.processAnswer(answer)).rejects.toThrow(
+      const connectionId = 'test-connection-id';
+      await expect(webrtcManager.processAnswer(answer, connectionId)).rejects.toThrow(
         'Peer connection not initialized'
       );
     });
@@ -581,9 +596,10 @@ describe('WebRTCManager', () => {
       // Mock addIceCandidate to fail
       mockPeerConnection.addIceCandidate.mockRejectedValueOnce(new Error('addIceCandidate failed'));
 
-      // Try to add ICE candidate
+      // Try to add ICE candidate with connection ID
       const mockIceCandidate = { candidate: 'mock-candidate' } as unknown as RTCIceCandidate;
-      await expect(webrtcManager.addIceCandidate(mockIceCandidate)).rejects.toThrow(
+      const connectionId = 'test-connection-id';
+      await expect(webrtcManager.addIceCandidate(mockIceCandidate, connectionId)).rejects.toThrow(
         'addIceCandidate failed'
       );
     });
