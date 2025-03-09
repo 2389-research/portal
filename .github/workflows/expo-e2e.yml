@@ -7,7 +7,7 @@ on:
         branches: [main, expo]
 
 jobs:
-    test:
+    e2e:
         runs-on: ubuntu-latest
         defaults:
             run:
@@ -26,5 +26,14 @@ jobs:
             - name: Install Root Dependencies
               run: npm install
 
-            - name: Run Linting
-              run: npm run lint
+            - name: Install Playwright
+              run: npx playwright install --with-deps
+
+            - name: Start Expo Web Server
+              run: npm run web &
+
+            - name: Wait for Server
+              run: sleep 30
+
+            - name: Run E2E Tests
+              run: npm run test:e2e
