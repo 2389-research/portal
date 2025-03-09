@@ -3,7 +3,7 @@
  * Adapts signaling to work with Expo
  */
 
-import { ApiInterface } from '../api/ApiInterface';
+import type { ApiInterface } from '../api/ApiInterface';
 import { createLogger } from './logger';
 
 export interface SignalingMessage {
@@ -60,9 +60,8 @@ export class SignalingService {
       // Provide more specific error information
       if (typeof error === 'object' && error !== null && 'message' in error) {
         throw new Error(`Signaling error: ${(error as { message: string }).message}`);
-      } else {
-        throw new Error('Failed to join room via signaling service.');
       }
+      throw new Error('Failed to join room via signaling service.');
     }
   }
 

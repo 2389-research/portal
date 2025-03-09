@@ -203,7 +203,13 @@ describe('MediaManager', () => {
     }
 
     // Ensure navigator exists in the global object with proper interface
-    if (!global.navigator) {
+    if (global.navigator) {
+      // Assign mock to navigator.mediaDevices using Object.defineProperty
+      Object.defineProperty(global.navigator, 'mediaDevices', {
+        value: mockMediaDevices,
+        configurable: true,
+      });
+    } else {
       // Create a navigator mock that implements the Navigator interface
       const navigatorMock = {
         // Add minimum required properties from Navigator interface
@@ -239,12 +245,6 @@ describe('MediaManager', () => {
 
       // Use double casting to avoid TypeScript complaints
       global.navigator = navigatorMock as unknown as Navigator;
-    } else {
-      // Assign mock to navigator.mediaDevices using Object.defineProperty
-      Object.defineProperty(global.navigator, 'mediaDevices', {
-        value: mockMediaDevices,
-        configurable: true,
-      });
     }
 
     mediaManager = new MediaManager();

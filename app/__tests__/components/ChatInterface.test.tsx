@@ -1,7 +1,7 @@
+import { fireEvent, render } from '@testing-library/react-native';
 import React from 'react';
-import { render, fireEvent } from '@testing-library/react-native';
 import { ChatInterface } from '../../components/ChatInterface';
-import { ChatMessage } from '../../services/chat';
+import type { ChatMessage } from '../../services/chat';
 
 // Mock the setTimeout global function
 jest.useFakeTimers();

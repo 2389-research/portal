@@ -1,6 +1,6 @@
-import { FirebaseApiClient } from '../../api/FirebaseApiClient';
 import * as firebaseAuth from 'firebase/auth';
 import * as firebaseFirestore from 'firebase/firestore';
+import { FirebaseApiClient } from '../../api/FirebaseApiClient';
 import { config } from '../../api/config';
 import { MockFirebaseApiClient } from '../../api/testing/firebase-test-utils';
 

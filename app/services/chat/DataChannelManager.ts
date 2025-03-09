@@ -3,8 +3,8 @@
  * Handles WebRTC data channel creation and management
  */
 
-import { WebRTCManager } from '../webrtc';
 import { createLogger } from '../logger';
+import type { WebRTCManager } from '../webrtc';
 
 export interface DataChannelMessage {
   id: string;
@@ -45,31 +45,30 @@ export class DataChannelManager {
       const ready = await this.waitForChannelReady(15000);
       this.logger.info('Data channel ready state after initialization:', ready);
       return ready;
-    } else {
-      // Create a promise that will resolve when the data channel is ready
-      return new Promise((resolve) => {
-        // Set up callback to receive the data channel
-        this.webrtcManager.setOnDataChannel((channel) => {
-          this.logger.info('Received data channel in callback');
-          this.dataChannel = channel;
-          this.setupDataChannel();
-
-          // Wait for the channel to be ready after receiving it
-          this.waitForChannelReady(15000).then((ready) => {
-            this.logger.info('Non-initiator data channel ready state:', ready);
-            resolve(ready);
-          });
-        });
-
-        // Set a timeout in case we never receive a data channel
-        setTimeout(() => {
-          if (!this.dataChannel) {
-            this.logger.error('Timed out waiting to receive data channel');
-            resolve(false);
-          }
-        }, 20000);
-      });
     }
+    // Create a promise that will resolve when the data channel is ready
+    return new Promise((resolve) => {
+      // Set up callback to receive the data channel
+      this.webrtcManager.setOnDataChannel((channel) => {
+        this.logger.info('Received data channel in callback');
+        this.dataChannel = channel;
+        this.setupDataChannel();
+
+        // Wait for the channel to be ready after receiving it
+        this.waitForChannelReady(15000).then((ready) => {
+          this.logger.info('Non-initiator data channel ready state:', ready);
+          resolve(ready);
+        });
+      });
+
+      // Set a timeout in case we never receive a data channel
+      setTimeout(() => {
+        if (!this.dataChannel) {
+          this.logger.error('Timed out waiting to receive data channel');
+          resolve(false);
+        }
+      }, 20000);
+    });
   }
 
   /**
@@ -176,7 +175,7 @@ export class DataChannelManager {
   /**
    * Wait for data channel to open (with timeout)
    */
-  public waitForChannelReady(timeoutMs: number = 10000): Promise<boolean> {
+  public waitForChannelReady(timeoutMs = 10000): Promise<boolean> {
     return new Promise((resolve) => {
       if (this.isReady()) {
         this.logger.info('Data channel already open');

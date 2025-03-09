@@ -2,11 +2,12 @@
  * Login component for Firebase authentication
  */
 
-import React, { useState, useEffect } from 'react';
+import { Avatar, Button, Card, Spinner, Text } from '@ui-kitten/components';
+import type React from 'react';
+import { useEffect, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
-import { Button, Card, Text, Avatar, Spinner } from '@ui-kitten/components';
-import { UserInfo } from '../api/ApiInterface';
 import { ApiProvider } from '../api';
+import type { UserInfo } from '../api/ApiInterface';
 
 interface LoginProps {
   onLoginStateChange?: (isLoggedIn: boolean) => void;

@@ -4,12 +4,12 @@
  * and properly encapsulates Firebase-specific implementation details
  */
 
-import { FirebaseApp, FirebaseOptions } from 'firebase/app';
-import { User } from 'firebase/auth';
-import { Firestore } from 'firebase/firestore';
-import { ApiInterface, RoomResponse, JoinRoomResponse, UserInfo } from './ApiInterface';
-import { SignalingMessage } from '../services/signaling';
+import type { FirebaseApp, FirebaseOptions } from 'firebase/app';
+import type { User } from 'firebase/auth';
+import type { Firestore } from 'firebase/firestore';
 import { createLogger } from '../services/logger';
+import type { SignalingMessage } from '../services/signaling';
+import type { ApiInterface, JoinRoomResponse, RoomResponse, UserInfo } from './ApiInterface';
 import { FirebaseAuthManager } from './firebase/FirebaseAuthManager';
 import { FirebaseRoomManager } from './firebase/FirebaseRoomManager';
 import { FirebaseSignalingManager } from './firebase/FirebaseSignalingManager';
@@ -131,7 +131,7 @@ export class FirebaseApiClient implements ApiInterface {
   /**
    * Get signaling messages
    */
-  public async getSignals(roomId: string, since: number = 0): Promise<SignalingMessage[]> {
+  public async getSignals(roomId: string, since = 0): Promise<SignalingMessage[]> {
     try {
       // Use signaling manager to get signals
       return await this.signalingManager.getSignals(roomId, since);

@@ -3,10 +3,10 @@
  * Handles WebRTC signaling through Firebase
  */
 
-import { FirebaseManager } from './FirebaseManager';
-import { SignalingMessage } from '../../services/signaling';
-import { collection, addDoc, query, where, orderBy, getDocs, Timestamp } from 'firebase/firestore';
+import { Timestamp, addDoc, collection, getDocs, orderBy, query, where } from 'firebase/firestore';
 import { createLogger } from '../../services/logger';
+import type { SignalingMessage } from '../../services/signaling';
+import { FirebaseManager } from './FirebaseManager';
 
 export class FirebaseSignalingManager extends FirebaseManager {
   protected logger = createLogger('FirebaseSignaling');
@@ -35,7 +35,7 @@ export class FirebaseSignalingManager extends FirebaseManager {
       const signalsCollectionRef = collection(db, 'rooms', roomId, 'signals');
       await addDoc(signalsCollectionRef, messageWithTimestamp);
 
-      this.logger.info(`Signal sent successfully`);
+      this.logger.info('Signal sent successfully');
     } catch (error) {
       this.logger.error('Error sending signal:', error);
       throw error;
@@ -45,7 +45,7 @@ export class FirebaseSignalingManager extends FirebaseManager {
   /**
    * Get signaling messages
    */
-  public async getSignals(roomId: string, since: number = 0): Promise<SignalingMessage[]> {
+  public async getSignals(roomId: string, since = 0): Promise<SignalingMessage[]> {
     const db = this.getDb();
     if (!db) throw new Error('Not connected to Firebase');
 

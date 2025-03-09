@@ -2,9 +2,10 @@
  * Web-specific implementation of the video container
  */
 
-import React, { useRef, useEffect } from 'react';
-import { View, StyleSheet } from 'react-native';
 import { Text } from '@ui-kitten/components';
+import type React from 'react';
+import { useEffect, useRef } from 'react';
+import { StyleSheet, View } from 'react-native';
 
 // Define the props interface directly to avoid circular dependencies
 interface WebVideoContainerProps {

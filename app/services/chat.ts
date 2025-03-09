@@ -3,8 +3,8 @@
  * Delegates to the new implementation
  */
 
-import { WebRTCManager } from './webrtc';
-import { ChatManager as NewChatManager, ChatMessage } from './chat/ChatManager';
+import { ChatMessage, ChatManager as NewChatManager } from './chat/ChatManager';
+import type { WebRTCManager } from './webrtc';
 
 // Re-export the ChatMessage interface
 export { ChatMessage };
@@ -54,7 +54,7 @@ export class ChatManager {
   /**
    * Wait for data channel to open (with timeout)
    */
-  public waitForChannelReady(timeoutMs: number = 10000): Promise<boolean> {
+  public waitForChannelReady(timeoutMs = 10000): Promise<boolean> {
     return this.chatManager.waitForReady(timeoutMs);
   }
 

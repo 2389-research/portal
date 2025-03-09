@@ -3,8 +3,8 @@
  * Uses protected fields and public accessors for better encapsulation
  */
 
-import { initializeApp, getApp, FirebaseApp, FirebaseOptions } from 'firebase/app';
-import { getFirestore, Firestore } from 'firebase/firestore';
+import { type FirebaseApp, type FirebaseOptions, getApp, initializeApp } from 'firebase/app';
+import { type Firestore, getFirestore } from 'firebase/firestore';
 import { createLogger } from '../../services/logger';
 
 export class FirebaseManager {
@@ -70,10 +70,10 @@ export class FirebaseManager {
   /**
    * Generate a random ID
    */
-  protected generateRandomId(prefix: string, length: number = 12): string {
+  protected generateRandomId(prefix: string, length = 12): string {
     // Generate a random alphanumeric ID
     const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-    let result = prefix + '_';
+    let result = `${prefix}_`;
     for (let i = 0; i < length; i++) {
       result += chars.charAt(Math.floor(Math.random() * chars.length));
     }

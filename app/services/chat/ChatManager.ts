@@ -3,9 +3,9 @@
  * Manages chat messages and uses DataChannelManager for transport
  */
 
-import { DataChannelManager, DataChannelMessage } from './DataChannelManager';
-import { WebRTCManager } from '../webrtc';
 import { createLogger } from '../logger';
+import type { WebRTCManager } from '../webrtc';
+import { DataChannelManager, type DataChannelMessage } from './DataChannelManager';
 
 export interface ChatMessage {
   id: string;
@@ -141,7 +141,7 @@ export class ChatManager {
   /**
    * Wait for chat to be ready (with timeout)
    */
-  public waitForReady(timeoutMs: number = 10000): Promise<boolean> {
+  public waitForReady(timeoutMs = 10000): Promise<boolean> {
     return this.dataChannelManager.waitForChannelReady(timeoutMs);
   }
 

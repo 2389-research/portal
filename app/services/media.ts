@@ -82,21 +82,18 @@ export class MediaManager {
             mediaError.name === 'PermissionDeniedError'
           ) {
             throw new Error('Camera/microphone access denied. Please allow access and try again.');
-          } else if (
-            mediaError.name === 'NotFoundError' ||
-            mediaError.name === 'DevicesNotFoundError'
-          ) {
+          }
+          if (mediaError.name === 'NotFoundError' || mediaError.name === 'DevicesNotFoundError') {
             throw new Error(
               'No camera or microphone found. Please connect a device and try again.'
             );
-          } else if (
-            mediaError.name === 'NotReadableError' ||
-            mediaError.name === 'TrackStartError'
-          ) {
+          }
+          if (mediaError.name === 'NotReadableError' || mediaError.name === 'TrackStartError') {
             throw new Error(
               'Could not access camera/microphone. It may be in use by another application.'
             );
-          } else if (mediaError.name === 'OverconstrainedError') {
+          }
+          if (mediaError.name === 'OverconstrainedError') {
             throw new Error(
               'The requested media settings cannot be satisfied by the current device.'
             );

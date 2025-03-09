@@ -3,9 +3,9 @@
  * Uses platform-specific implementations for better separation of concerns
  */
 
-import React from 'react';
-import { StyleSheet, View, Platform } from 'react-native';
 import { Text } from '@ui-kitten/components';
+import type React from 'react';
+import { Platform, StyleSheet, View } from 'react-native';
 
 // Define the props interface
 export interface VideoContainerProps {

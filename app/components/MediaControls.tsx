@@ -2,9 +2,9 @@
  * Media controls component for WebRTC video chat
  */
 
-import React from 'react';
+import { Button, ButtonGroup, Icon, type IconProps } from '@ui-kitten/components';
+import type React from 'react';
 import { StyleSheet, View } from 'react-native';
-import { Button, ButtonGroup, Icon, IconProps } from '@ui-kitten/components';
 
 interface MediaControlsProps {
   audioEnabled: boolean;

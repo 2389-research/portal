@@ -3,7 +3,7 @@
  */
 
 import React from 'react';
-import { View, Text as RNText, TextInput } from 'react-native';
+import { Text as RNText, TextInput, View } from 'react-native';
 
 // Create basic mock components that render their children
 const createMockComponent = (displayName) => {
