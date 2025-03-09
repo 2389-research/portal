@@ -1,4 +1,4 @@
-name: Expo App Tests
+name: Expo App Typecheck
 
 on:
     push:
@@ -7,7 +7,7 @@ on:
         branches: [main, expo]
 
 jobs:
-    test:
+    typecheck:
         runs-on: ubuntu-latest
         defaults:
             run:
