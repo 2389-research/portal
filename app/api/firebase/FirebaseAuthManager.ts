@@ -54,7 +54,13 @@ export class FirebaseAuthManager extends FirebaseManager {
         this.authStateChangeListeners.forEach((listener) => listener(user));
 
         // We only need this callback once to resolve the promise
-        unsubscribe();
+        try {
+          if (typeof unsubscribe === 'function') {
+            unsubscribe();
+          }
+        } catch (e) {
+          this.logger.error('Error unsubscribing from auth state change:', e);
+        }
         resolve();
       });
 
