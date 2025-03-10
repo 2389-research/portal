@@ -50,15 +50,19 @@ export function useMedia(options: UseMediaOptions = {}) {
         logger.info('Initializing camera and microphone');
         mediaManagerRef.current = new MediaManager();
 
-        // Increase the timeout to 45 seconds for better browser compatibility
-        const MEDIA_TIMEOUT_MS = 45000;
+        // Use a more reasonable timeout of 15 seconds
+        const MEDIA_TIMEOUT_MS = 15000;
 
+        // Skip additional permission checks - we'll only request media once
+        // The multiple permission prompts were causing the flapping behavior
+        
         // Initialize media with a promise race to avoid hanging
         const mediaPromise = mediaManagerRef.current.initialize({ video: true, audio: true });
 
         // Create a media timeout promise
         const mediaTimeoutPromise = new Promise((_, reject) => {
           setTimeout(() => {
+            logger.warn(`Media initialization timed out after ${MEDIA_TIMEOUT_MS / 1000} seconds`);
             reject(
               new Error(`Media initialization timed out after ${MEDIA_TIMEOUT_MS / 1000} seconds`)
             );
