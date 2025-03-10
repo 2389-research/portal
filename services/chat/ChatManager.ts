@@ -1,10 +1,13 @@
 /**
  * Chat Manager
  * Manages chat messages and uses DataChannelManager for transport
+ * 
+ * Note: ChatManager now supports multiple peer connections by managing
+ * multiple DataChannelManager instances.
  */
 
 import { createLogger } from '../logger';
-import type { WebRTCManager } from '../webrtc';
+import type { WebRTCManager, PeerConnectionManager } from '../webrtc';
 import { DataChannelManager, type DataChannelMessage } from './DataChannelManager';
 
 export interface ChatMessage {
@@ -13,25 +16,87 @@ export interface ChatMessage {
   content: string;
   timestamp: number;
   isLocal: boolean;
+  peerId?: string; // The specific peer this message was received from
 }
 
 export class ChatManager {
   private messages: ChatMessage[] = [];
   private userId: string;
   private onMessageCallback: ((message: ChatMessage) => void) | null = null;
-  private dataChannelManager: DataChannelManager;
+  private dataChannelManagers: Map<string, DataChannelManager> = new Map();
+  private primaryDataChannelManager: DataChannelManager | null = null;
   private logger = createLogger('Chat');
   private initialized = false;
   private isInitializing = false;
+  private onReadyStateChangeCallbacks: Set<(isReady: boolean) => void> = new Set();
 
-  constructor(userId: string, webrtcManager: WebRTCManager) {
+  /**
+   * Create a new ChatManager
+   * @param userId The local user's ID
+   * @param webrtcManager Either a WebRTCManager for a single connection or null
+   */
+  constructor(userId: string, webrtcManager?: WebRTCManager | null) {
     this.userId = userId;
-    this.dataChannelManager = new DataChannelManager(webrtcManager);
-
+    
+    // If we have a WebRTCManager, create a data channel manager for it
+    if (webrtcManager) {
+      const dataChannelManager = new DataChannelManager(webrtcManager);
+      this.primaryDataChannelManager = dataChannelManager;
+      
+      // Set ID as "primary" for the main connection
+      this.dataChannelManagers.set("primary", dataChannelManager);
+      
+      // Set up the data channel message handler
+      dataChannelManager.onMessage((message) => {
+        this.handleIncomingMessage(message, "primary");
+      });
+      
+      // Set up ready state change handler
+      dataChannelManager.onReadyStateChange((isReady) => {
+        this.notifyReadyStateChange();
+      });
+    }
+  }
+  
+  /**
+   * Handle a new data channel from a peer
+   * @param dataChannel The data channel received
+   * @param peerId The ID of the peer that sent the data channel
+   */
+  public handleNewDataChannel(dataChannel: RTCDataChannel, peerId: string): void {
+    this.logger.info(`Handling new data channel from peer ${peerId}`);
+    
+    // Check if we already have a data channel manager for this peer
+    if (this.dataChannelManagers.has(peerId)) {
+      this.logger.info(`Using existing data channel manager for peer ${peerId}`);
+      const existingManager = this.dataChannelManagers.get(peerId);
+      existingManager?.handleNewDataChannel(dataChannel);
+      return;
+    }
+    
+    // Create a new data channel manager just for this data channel
+    const newManager = new DataChannelManager(null);
+    newManager.handleNewDataChannel(dataChannel);
+    
+    // Store it in our map
+    this.dataChannelManagers.set(peerId, newManager);
+    
+    // If we don't have a primary data channel manager, use this one
+    if (!this.primaryDataChannelManager) {
+      this.primaryDataChannelManager = newManager;
+    }
+    
     // Set up the data channel message handler
-    this.dataChannelManager.onMessage((message) => {
-      this.handleIncomingMessage(message);
+    newManager.onMessage((message) => {
+      this.handleIncomingMessage(message, peerId);
     });
+    
+    // Set up ready state change handler
+    newManager.onReadyStateChange((isReady) => {
+      this.notifyReadyStateChange();
+    });
+    
+    this.logger.info(`Added new data channel from peer ${peerId}, total channels: ${this.dataChannelManagers.size}`);
   }
 
   /**
@@ -67,12 +132,33 @@ export class ChatManager {
     this.logger.info('Initializing chat, isInitiator:', isInitiator);
 
     try {
-      // Initialize the data channel
-      const result = await this.dataChannelManager.initialize(isInitiator);
-      this.initialized = result;
+      let overallResult = false;
+      
+      // Initialize all data channel managers
+      if (this.dataChannelManagers.size === 0) {
+        this.logger.warn('No data channel managers to initialize');
+        this.isInitializing = false;
+        return false;
+      }
+      
+      // Try to initialize each data channel manager
+      for (const [peerId, manager] of this.dataChannelManagers.entries()) {
+        try {
+          this.logger.info(`Initializing data channel for peer ${peerId}`);
+          const result = await manager.initialize(isInitiator);
+          if (result) {
+            overallResult = true; // At least one channel initialized successfully
+          }
+        } catch (error) {
+          this.logger.error(`Error initializing data channel for peer ${peerId}:`, error);
+          // Continue with other peers even if one fails
+        }
+      }
+      
+      this.initialized = overallResult;
       this.isInitializing = false;
 
-      return result;
+      return overallResult;
     } catch (error) {
       this.logger.error('Error initializing chat:', error);
       this.isInitializing = false;
@@ -81,10 +167,10 @@ export class ChatManager {
   }
 
   /**
-   * Handle incoming messages from the data channel
+   * Handle incoming messages from a data channel
    */
-  private handleIncomingMessage(message: DataChannelMessage): void {
-    this.logger.info('Received chat message from:', message.sender);
+  private handleIncomingMessage(message: DataChannelMessage, peerId: string): void {
+    this.logger.info(`Received chat message from ${message.sender} via peer ${peerId}`);
 
     const chatMessage: ChatMessage = {
       id: message.id,
@@ -92,6 +178,7 @@ export class ChatManager {
       content: message.content,
       timestamp: message.timestamp,
       isLocal: false,
+      peerId, // Include the peer ID that this message came from
     };
 
     this.messages.push(chatMessage);
@@ -102,12 +189,12 @@ export class ChatManager {
   }
 
   /**
-   * Send a chat message
+   * Send a chat message to all connected peers
    */
   public sendMessage(content: string): ChatMessage | null {
-    // Check if data channel is ready
+    // Check if any data channel is ready
     if (!this.isReady()) {
-      this.logger.error('Chat not ready to send message');
+      this.logger.error('Chat not ready to send message, no ready data channels');
       return null;
     }
 
@@ -126,10 +213,32 @@ export class ChatManager {
       timestamp,
     };
 
-    // Try to send the message
-    const sent = this.dataChannelManager.send(message);
+    let anySent = false;
+    let channelCount = 0;
+    
+    // Try to send the message to all connected peers
+    for (const [peerId, manager] of this.dataChannelManagers.entries()) {
+      if (manager.isReady()) {
+        channelCount++;
+        try {
+          const sent = manager.send(message);
+          if (sent) {
+            anySent = true;
+            this.logger.debug(`Message sent to peer ${peerId}`);
+          } else {
+            this.logger.warn(`Failed to send message to peer ${peerId}`);
+          }
+        } catch (error) {
+          this.logger.error(`Error sending message to peer ${peerId}:`, error);
+        }
+      }
+    }
+    
+    this.logger.info(
+      `Message sent to ${channelCount} peers out of ${this.dataChannelManagers.size} total connections`
+    );
 
-    if (sent) {
+    if (anySent) {
       // Create a chat message and add it to our local list
       const chatMessage: ChatMessage = {
         ...message,
@@ -146,6 +255,23 @@ export class ChatManager {
     }
 
     return null;
+  }
+
+  /**
+   * Notify all ready state change callbacks of the current ready state
+   */
+  private notifyReadyStateChange(): void {
+    const isReady = this.isReady();
+    this.logger.debug(`Notifying ready state change: ${isReady}`);
+    
+    // Notify all callbacks
+    this.onReadyStateChangeCallbacks.forEach(callback => {
+      try {
+        callback(isReady);
+      } catch (error) {
+        this.logger.error('Error in ready state change callback:', error);
+      }
+    });
   }
 
   /**
@@ -170,7 +296,15 @@ export class ChatManager {
    * @returns Function to unregister the callback
    */
   public onReadyStateChange(callback: (isReady: boolean) => void): () => void {
-    return this.dataChannelManager.onReadyStateChange(callback);
+    this.onReadyStateChangeCallbacks.add(callback);
+    
+    // Immediately notify with current ready state
+    callback(this.isReady());
+    
+    // Return a function to unregister the callback
+    return () => {
+      this.onReadyStateChangeCallbacks.delete(callback);
+    };
   }
 
   /**
@@ -181,24 +315,59 @@ export class ChatManager {
   }
 
   /**
-   * Check if chat is ready to send messages
+   * Check if chat is ready to send messages to at least one peer
    */
   public isReady(): boolean {
-    return this.dataChannelManager.isReady();
+    // We're ready if any data channel manager is ready
+    for (const manager of this.dataChannelManagers.values()) {
+      if (manager.isReady()) {
+        return true;
+      }
+    }
+    return false;
   }
 
   /**
-   * Wait for chat to be ready (with timeout)
+   * Wait for chat to be ready with any peer (with timeout)
    */
   public waitForReady(timeoutMs = 10000): Promise<boolean> {
-    return this.dataChannelManager.waitForChannelReady(timeoutMs);
+    // If already ready, return immediately
+    if (this.isReady()) {
+      return Promise.resolve(true);
+    }
+    
+    return new Promise((resolve) => {
+      // Set up a one-time ready state change handler
+      const unregister = this.onReadyStateChange((isReady) => {
+        if (isReady) {
+          clearTimeout(timeoutId);
+          unregister();
+          resolve(true);
+        }
+      });
+      
+      // Set up timeout
+      const timeoutId = setTimeout(() => {
+        unregister();
+        resolve(this.isReady());
+      }, timeoutMs);
+    });
   }
 
   /**
-   * Close the chat
+   * Close the chat and all data channels
    */
   public close(): void {
-    this.dataChannelManager.close();
+    // Close all data channel managers
+    for (const [peerId, manager] of this.dataChannelManagers.entries()) {
+      this.logger.info(`Closing data channel for peer ${peerId}`);
+      manager.close();
+    }
+    
+    // Clear all managers
+    this.dataChannelManagers.clear();
+    this.primaryDataChannelManager = null;
+    
     this.initialized = false;
     this.isInitializing = false;
   }

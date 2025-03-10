@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ChatManager, type ChatMessage } from '../services/chat/index';
 import { createLogger } from '../services/logger';
-import type { WebRTCManager } from '../services/webrtc';
+import type { PeerConnectionManager } from '../services/webrtc';
 
 interface UseChatOptions {
   onChatError?: (error: string) => void;
@@ -13,7 +13,7 @@ interface UseChatOptions {
  */
 export function useChat(
   userId: string | null,
-  webrtcManager: WebRTCManager | null,
+  peerManager: PeerConnectionManager | null,
   options: UseChatOptions = {}
 ) {
   const logger = createLogger('useChat');
@@ -25,14 +25,15 @@ export function useChat(
   const [chatError, setChatError] = useState<string | null>(null);
   const [lastInitAttempt, setLastInitAttempt] = useState(0);
   const [isInitialized, setIsInitialized] = useState(false);
+  const [activePeers, setActivePeers] = useState<string[]>([]);
 
   // Service reference
   const chatManagerRef = useRef<ChatManager | null>(null);
 
-  // Initialize chat when webrtcManager and userId are available
+  // Initialize chat when peerManager and userId are available
   useEffect(() => {
     // Skip initialization if dependencies aren't available
-    if (!userId || !webrtcManager) {
+    if (!userId || !peerManager) {
       logger.debug('Missing dependencies for chat initialization');
       return;
     }
@@ -59,15 +60,46 @@ export function useChat(
       return cleanup;
     }
 
+    // Track active peers
+    const updateActivePeers = () => {
+      if (peerManager) {
+        const peers = peerManager.getAllPeerIds();
+        setActivePeers(peers);
+        logger.debug(`Active peers for chat: ${peers.length}`);
+      }
+    };
+
+    // Update active peers initially
+    updateActivePeers();
+
     // Proceed with initialization
     setLastInitAttempt(now);
 
     const initChat = async () => {
       try {
         // Only create a new ChatManager if needed
-        if (!chatManagerRef.current && webrtcManager) {
-          logger.info('Creating new chat manager');
-          chatManagerRef.current = new ChatManager(userId, webrtcManager);
+        if (!chatManagerRef.current && peerManager) {
+          logger.info('Creating new chat manager with peer connection manager');
+          
+          // Pass the first active peer connection (if available) for backward compatibility 
+          // with ChatManager which expects a single WebRTCManager
+          const firstPeerId = peerManager.getAllPeerIds()[0];
+          const firstPeerConnection = firstPeerId 
+            ? peerManager.getPeerConnection(firstPeerId) 
+            : null;
+          
+          if (!firstPeerConnection && peerManager.getAllPeerIds().length === 0) {
+            logger.warn('No active peer connections available for chat initialization');
+            // Continue anyway, the data channel will be created when peers connect
+          } else if (firstPeerConnection) {
+            logger.info(`Using peer ${firstPeerId} for initial chat setup`);
+          }
+          
+          // For initial implementation compatibility, use the first peer's connection if available
+          chatManagerRef.current = firstPeerConnection 
+            ? new ChatManager(userId, firstPeerConnection)
+            // If no peers yet, just pass the userId for now
+            : new ChatManager(userId);
 
           // Set up message callback
           chatManagerRef.current.onMessage((message) => {
@@ -87,10 +119,25 @@ export function useChat(
             logger.info('Chat ready state changed:', isReady);
             setChatReady(isReady);
           });
+          
+          // Set up data channel callback for new connections
+          if (peerManager) {
+            peerManager.setOnDataChannel((dataChannel, peerId) => {
+              logger.info(`Received data channel from peer ${peerId}`);
+              
+              // Let the ChatManager handle the new data channel
+              if (chatManagerRef.current) {
+                chatManagerRef.current.handleNewDataChannel(dataChannel, peerId);
+              }
+              
+              // Update active peers
+              updateActivePeers();
+            });
+          }
         }
 
-        // Initialize the chat data channel
-        if (chatManagerRef.current) {
+        // Initialize the chat data channel if we have any peers
+        if (chatManagerRef.current && peerManager.getAllPeerIds().length > 0) {
           const isInitiator = true; // Always try as initiator to ensure channel creation
           const result = await chatManagerRef.current.initialize(isInitiator);
           logger.info('Chat initialization result:', result);
@@ -107,6 +154,8 @@ export function useChat(
 
             if (onChatError) onChatError(error);
           }
+        } else {
+          logger.info('Deferring chat initialization until peers are available');
         }
       } catch (error: unknown) {
         // Format error message
@@ -132,7 +181,7 @@ export function useChat(
     return cleanup;
   }, [
     userId,
-    webrtcManager,
+    peerManager,
     onChatError,
     onMessageReceived,
     logger,

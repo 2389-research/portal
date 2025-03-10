@@ -1,6 +1,10 @@
 /**
  * Data Channel Manager
  * Handles WebRTC data channel creation and management
+ * 
+ * This class can work in two modes:
+ * 1. With a WebRTCManager to create and manage data channels
+ * 2. With an externally provided data channel
  */
 
 import { createLogger } from '../logger';
@@ -15,7 +19,7 @@ export interface DataChannelMessage {
 
 export class DataChannelManager {
   private dataChannel: RTCDataChannel | null = null;
-  private webrtcManager: WebRTCManager;
+  private webrtcManager: WebRTCManager | null = null;
   private onMessageCallback: ((message: DataChannelMessage) => void) | null = null;
   private onReadyStateChangeCallbacks: ((isReady: boolean) => void)[] = [];
   private logger = createLogger('DataChannel');
@@ -23,8 +27,37 @@ export class DataChannelManager {
   private channelName = 'chat';
   private initialized = false;
 
-  constructor(webrtcManager: WebRTCManager) {
+  /**
+   * Create a new DataChannelManager
+   * @param webrtcManager Optional WebRTCManager to use for creating data channels. 
+   * If null, the manager will work with externally provided data channels.
+   */
+  constructor(webrtcManager: WebRTCManager | null) {
     this.webrtcManager = webrtcManager;
+  }
+  
+  /**
+   * Handle a newly received data channel
+   * @param channel The data channel to manage
+   */
+  public handleNewDataChannel(channel: RTCDataChannel): void {
+    this.logger.info(`Handling externally provided data channel: ${channel.label}`);
+    
+    // If we already have a data channel, check if we should replace it
+    if (this.dataChannel) {
+      if (this.dataChannel.readyState === 'open') {
+        this.logger.info('Keeping existing open data channel');
+        return;
+      }
+      
+      // Close the existing channel if it's not open
+      this.dataChannel.close();
+    }
+    
+    // Use the new channel
+    this.dataChannel = channel;
+    this.setupDataChannel();
+    this.initialized = true;
   }
 
   /**
@@ -36,6 +69,20 @@ export class DataChannelManager {
       this.logger.info('Data channel already initialized or initializing');
       return this.isReady();
     }
+    
+    // If we already have a data channel (externally provided), just check if it's ready
+    if (this.dataChannel) {
+      const isReady = this.dataChannel.readyState === 'open';
+      this.initialized = isReady;
+      this.logger.info(`Using existing data channel, ready state: ${isReady}`);
+      return isReady;
+    }
+
+    // If we don't have a WebRTC manager and no data channel, we can't initialize
+    if (!this.webrtcManager) {
+      this.logger.error('Cannot initialize: No WebRTC manager and no data channel provided');
+      return false;
+    }
 
     this.isInitializing = true;
     this.logger.info('Initializing data channel, isInitiator:', isInitiator);
@@ -44,13 +91,6 @@ export class DataChannelManager {
       if (isInitiator) {
         // Create data channel as the initiator
         this.logger.info('Creating data channel as initiator');
-
-        // Make sure webrtcManager is properly initialized
-        if (!this.webrtcManager) {
-          this.logger.error('WebRTC manager is not available');
-          this.isInitializing = false;
-          return false;
-        }
 
         // Create the data channel and set up event handlers
         this.dataChannel = this.webrtcManager.createDataChannel(this.channelName);
@@ -73,7 +113,7 @@ export class DataChannelManager {
         // Register for data channel callback as non-initiator
         return new Promise((resolve) => {
           // Set up callback to receive the data channel
-          this.webrtcManager.setOnDataChannel((channel) => {
+          this.webrtcManager?.setOnDataChannel((channel) => {
             this.logger.info('Received data channel in callback:', channel.label);
             if (channel.label === this.channelName) {
               this.dataChannel = channel;

@@ -80,21 +80,21 @@ export function useRoomInitialization(
       logger.warn('WebRTC error occurred, user can continue via UI button');
     },
     // Handle renegotiation needed events
-    onRenegotiationNeeded: async (connectionId: string) => {
-      logger.info('WebRTC renegotiation needed for connection ID:', connectionId);
+    onRenegotiationNeeded: async (peerId: string, connectionId: string) => {
+      logger.info(`WebRTC renegotiation needed for peer ${peerId} with connection ID: ${connectionId}`);
 
       if (webrtc.handleRenegotiation && signaling.connected) {
         try {
           // Generate a new offer for renegotiation
-          const result = await webrtc.handleRenegotiation();
+          const result = await webrtc.handleRenegotiation(peerId);
 
           if (result) {
-            // Broadcast the renegotiation offer to all peers in the room
-            logger.info('Sending renegotiation offer');
+            // Send the renegotiation offer to the specific peer
+            logger.info(`Sending renegotiation offer to peer ${peerId}`);
             await signaling.sendMessage(
               'webrtc-offer',
               result.offer,
-              undefined,
+              peerId, // Send directly to this peer
               undefined,
               undefined,
               {
@@ -104,7 +104,7 @@ export function useRoomInitialization(
             );
           }
         } catch (error) {
-          logger.error('Error handling WebRTC renegotiation:', error);
+          logger.error(`Error handling WebRTC renegotiation for peer ${peerId}:`, error);
         }
       }
     },
@@ -130,19 +130,20 @@ export function useRoomInitialization(
       if (webrtc.isInitialized && webrtc.createOffer) {
         (async () => {
           try {
-            const result = await webrtc.createOffer();
+            // Create an offer specifically for this peer
+            const result = await webrtc.createOffer(userId);
             if (result && signaling.sendMessage) {
               // Extract the offer and connection ID
               const { offer, connectionId } = result;
-              logger.info('Created offer with connection ID:', connectionId);
+              logger.info(`Created offer for peer ${userId} with connection ID: ${connectionId}`);
 
-              // Send the offer with the connection ID
+              // Send the offer with the connection ID to the specific peer
               await signaling.sendMessage('webrtc-offer', offer, userId, undefined, undefined, {
                 connectionId,
               });
             }
           } catch (error) {
-            logger.error('Error creating offer for new user:', error);
+            logger.error(`Error creating offer for new user ${userId}:`, error);
           }
         })();
       }
@@ -157,8 +158,8 @@ export function useRoomInitialization(
     },
   });
 
-  // We need to make sure we only pass webrtcManager when it's initialized
-  const chat = useChat(signaling.userId, webrtc.isInitialized ? webrtc.webrtcManager : null, {
+  // We need to make sure we only pass peerManager when it's initialized
+  const chat = useChat(signaling.userId, webrtc.isInitialized ? webrtc.peerManager : null, {
     onChatError: (error) => {
       logger.warn('Chat error, but continuing:', error);
       // Non-fatal, just move to completion if we're in the chat phase
@@ -265,6 +266,9 @@ export function useRoomInitialization(
       try {
         // Extract the connection ID from the message
         const connectionId = message.connectionId || (message.data && message.data.connectionId);
+        
+        // Get the sender (peerId) from the message
+        const peerId = message.sender;
 
         // Check if this is a renegotiation
         const isRenegotiation =
@@ -275,22 +279,22 @@ export function useRoomInitialization(
             if (!webrtc.processOffer) return;
 
             if (isRenegotiation) {
-              logger.info('Received renegotiation offer with connection ID:', connectionId);
+              logger.info(`Received renegotiation offer from peer ${peerId} with connection ID: ${connectionId}`);
             }
 
             if (!connectionId) {
-              logger.warn('Received offer without connection ID, generating a fallback ID');
+              logger.warn(`Received offer from peer ${peerId} without connection ID, generating a fallback ID`);
               // Generate a fallback ID if none was provided (for backward compatibility)
               const fallbackId = Math.random().toString(36).substring(2, 15);
               logger.info('Using fallback connection ID:', fallbackId);
 
-              const answer = await webrtc.processOffer(message.data, fallbackId);
+              const answer = await webrtc.processOffer(peerId, message.data, fallbackId);
               if (answer) {
                 // Send answer with the fallback connection ID
                 await signaling.sendMessage(
                   'webrtc-answer',
                   answer.answer,
-                  message.sender,
+                  peerId,
                   undefined,
                   undefined,
                   {
@@ -301,17 +305,16 @@ export function useRoomInitialization(
               }
             } else {
               logger.info(
-                `Processing ${isRenegotiation ? 'renegotiation ' : ''}offer with connection ID:`,
-                connectionId
+                `Processing ${isRenegotiation ? 'renegotiation ' : ''}offer from peer ${peerId} with connection ID: ${connectionId}`
               );
-              const answer = await webrtc.processOffer(message.data, connectionId);
+              const answer = await webrtc.processOffer(peerId, message.data, connectionId);
 
               if (answer) {
                 // Send answer with same connection ID from the offer
                 await signaling.sendMessage(
                   'webrtc-answer',
                   answer.answer,
-                  message.sender,
+                  peerId,
                   undefined,
                   undefined,
                   {
@@ -327,28 +330,18 @@ export function useRoomInitialization(
             if (!webrtc.processAnswer) return;
 
             if (isRenegotiation) {
-              logger.info('Received answer for renegotiation with connection ID:', connectionId);
+              logger.info(`Received renegotiation answer from peer ${peerId} with connection ID: ${connectionId}`);
             }
 
             if (!connectionId) {
-              logger.warn('Received answer without connection ID, using default connection');
-              // For backward compatibility, still process the answer
-              await webrtc.processAnswer(
-                message.data,
-                webrtc.webrtcManager?.getCurrentConnectionId() || 'default'
-              );
+              logger.warn(`Received answer from peer ${peerId} without connection ID, using default connection`);
+              // For backward compatibility, use a default connection ID
+              await webrtc.processAnswer(peerId, message.data, 'default');
             } else {
               logger.info(
-                `Processing ${isRenegotiation ? 'renegotiation ' : ''}answer with connection ID:`,
-                connectionId
+                `Processing ${isRenegotiation ? 'renegotiation ' : ''}answer from peer ${peerId} with connection ID: ${connectionId}`
               );
-              await webrtc.processAnswer(message.data, connectionId);
-
-              // If this was a renegotiation, we need to complete the process
-              if (isRenegotiation && webrtc.webrtcManager) {
-                logger.info('Completing renegotiation after receiving answer');
-                await webrtc.webrtcManager.completeRenegotiation();
-              }
+              await webrtc.processAnswer(peerId, message.data, connectionId);
             }
             break;
 
@@ -356,15 +349,12 @@ export function useRoomInitialization(
             if (!webrtc.addIceCandidate) return;
 
             if (!connectionId) {
-              logger.warn('Received ICE candidate without connection ID, using default connection');
-              // For backward compatibility, still process the candidate with the current connection ID
-              await webrtc.addIceCandidate(
-                message.data,
-                webrtc.webrtcManager?.getCurrentConnectionId() || 'default'
-              );
+              logger.warn(`Received ICE candidate from peer ${peerId} without connection ID, using default connection`);
+              // For backward compatibility, use a default connection ID
+              await webrtc.addIceCandidate(peerId, message.data, 'default');
             } else {
-              logger.info('Adding ICE candidate with connection ID:', connectionId);
-              await webrtc.addIceCandidate(message.data, connectionId);
+              logger.info(`Adding ICE candidate from peer ${peerId} with connection ID: ${connectionId}`);
+              await webrtc.addIceCandidate(peerId, message.data, connectionId);
             }
             break;
         }
@@ -382,13 +372,20 @@ export function useRoomInitialization(
     signaling.on('webrtc-answer', handleAnswer);
     signaling.on('ice-candidate', handleIceCandidate);
 
-    // Setup ICE candidate handler
+    // Setup ICE candidate handler for all peers
     if (webrtc.setOnIceCandidate) {
-      webrtc.setOnIceCandidate(async (candidate, connectionId) => {
-        // Send ICE candidate with the connection ID
-        await signaling.sendMessage('ice-candidate', candidate, undefined, undefined, undefined, {
-          connectionId,
-        });
+      webrtc.setOnIceCandidate(async (candidate, peerId, connectionId) => {
+        // Send ICE candidate with the peer ID and connection ID
+        await signaling.sendMessage(
+          'ice-candidate', 
+          candidate, 
+          peerId, // Send directly to this peer
+          undefined, 
+          undefined, 
+          {
+            connectionId,
+          }
+        );
       });
     }
 
