@@ -5,6 +5,8 @@ import { WebRTCManager } from '../services/webrtc';
 interface UseWebRTCOptions {
   skipWebRTC?: boolean;
   onWebRTCError?: (error: string) => void;
+  onRenegotiationNeeded?: (connectionId: string) => void;
+  onTrackRemoved?: (trackId: string, peerId: string) => void;
 }
 
 /**
@@ -12,12 +14,18 @@ interface UseWebRTCOptions {
  */
 export function useWebRTC(localStream: MediaStream | null, options: UseWebRTCOptions = {}) {
   const logger = createLogger('useWebRTC');
-  const { skipWebRTC = false, onWebRTCError } = options;
+  const { 
+    skipWebRTC = false, 
+    onWebRTCError,
+    onRenegotiationNeeded,
+    onTrackRemoved 
+  } = options;
 
   // WebRTC state
   const [remoteStreams, setRemoteStreams] = useState<Map<string, MediaStream>>(new Map());
   const [isInitialized, setIsInitialized] = useState(false);
   const [webrtcError, setWebRTCError] = useState<string | null>(null);
+  const [isRenegotiating, setIsRenegotiating] = useState(false);
 
   // Service reference
   const webrtcManagerRef = useRef<WebRTCManager | null>(null);
@@ -47,6 +55,27 @@ export function useWebRTC(localStream: MediaStream | null, options: UseWebRTCOpt
             return newStreams;
           });
         });
+        
+        // Setup negotiation needed callback
+        webrtcManagerRef.current.setOnNegotiationNeeded((connectionId) => {
+          logger.info('Negotiation needed for connection:', connectionId);
+          setIsRenegotiating(true);
+          
+          if (onRenegotiationNeeded) {
+            onRenegotiationNeeded(connectionId);
+          } else {
+            // Auto-handle renegotiation if no callback is provided
+            handleRenegotiation();
+          }
+        });
+        
+        // Setup track removed callback
+        if (onTrackRemoved) {
+          webrtcManagerRef.current.setOnTrackRemoved((trackId, peerId) => {
+            logger.info(`Track ${trackId} removed from peer ${peerId}`);
+            onTrackRemoved(trackId, peerId);
+          });
+        }
       } catch (error: unknown) {
         logger.error('WebRTC initialization error:', error);
         const errorMessage =
@@ -75,7 +104,7 @@ export function useWebRTC(localStream: MediaStream | null, options: UseWebRTCOpt
         setIsInitialized(false);
       }
     };
-  }, [localStream, skipWebRTC, logger, onWebRTCError]);
+  }, [localStream, skipWebRTC, logger, onWebRTCError, onRenegotiationNeeded, onTrackRemoved]);
 
   // Process an incoming WebRTC offer
   const processOffer = useCallback(
@@ -229,6 +258,139 @@ export function useWebRTC(localStream: MediaStream | null, options: UseWebRTCOpt
     [logger]
   );
 
+  // Handle renegotiation automatically
+  const handleRenegotiation = useCallback(async () => {
+    if (!webrtcManagerRef.current || !isInitialized) {
+      logger.warn('Cannot handle renegotiation: WebRTC not initialized');
+      return null;
+    }
+
+    try {
+      logger.info('Handling renegotiation automatically');
+      const result = await webrtcManagerRef.current.handleRenegotiation();
+      setIsRenegotiating(false);
+      return result;
+    } catch (error) {
+      logger.error('Error handling renegotiation:', error);
+      setIsRenegotiating(false);
+      return null;
+    }
+  }, [isInitialized, logger]);
+
+  // Add a track to the peer connection
+  const addTrack = useCallback(
+    async (track: MediaStreamTrack, stream: MediaStream, type: 'audio' | 'video' | 'screen' = 'video') => {
+      if (!webrtcManagerRef.current || !isInitialized) {
+        logger.warn('Cannot add track: WebRTC not initialized');
+        return false;
+      }
+
+      try {
+        logger.info(`Adding ${type} track to WebRTC connection`);
+        return await webrtcManagerRef.current.addTrack(track, stream, type);
+      } catch (error) {
+        logger.error('Error adding track:', error);
+        return false;
+      }
+    },
+    [isInitialized, logger]
+  );
+
+  // Remove a track from the peer connection
+  const removeTrack = useCallback(
+    (trackId: string) => {
+      if (!webrtcManagerRef.current || !isInitialized) {
+        logger.warn('Cannot remove track: WebRTC not initialized');
+        return false;
+      }
+
+      try {
+        logger.info('Removing track from WebRTC connection:', trackId);
+        return webrtcManagerRef.current.removeTrack(trackId);
+      } catch (error) {
+        logger.error('Error removing track:', error);
+        return false;
+      }
+    },
+    [isInitialized, logger]
+  );
+
+  // Replace an existing track with a new one
+  const replaceTrack = useCallback(
+    (oldTrackId: string, newTrack: MediaStreamTrack) => {
+      if (!webrtcManagerRef.current || !isInitialized) {
+        logger.warn('Cannot replace track: WebRTC not initialized');
+        return false;
+      }
+
+      try {
+        logger.info(`Replacing track ${oldTrackId} with ${newTrack.id}`);
+        return webrtcManagerRef.current.replaceTrack(oldTrackId, newTrack);
+      } catch (error) {
+        logger.error('Error replacing track:', error);
+        return false;
+      }
+    },
+    [isInitialized, logger]
+  );
+
+  // Toggle a track type (audio/video/screen)
+  const toggleTrack = useCallback(
+    (type: 'audio' | 'video' | 'screen') => {
+      if (!webrtcManagerRef.current || !isInitialized) {
+        logger.warn(`Cannot toggle ${type} track: WebRTC not initialized`);
+        return false;
+      }
+
+      try {
+        logger.info(`Toggling ${type} track`);
+        return webrtcManagerRef.current.toggleTrack(type);
+      } catch (error) {
+        logger.error(`Error toggling ${type} track:`, error);
+        return false;
+      }
+    },
+    [isInitialized, logger]
+  );
+
+  // Add a screen share track
+  const addScreenShareTrack = useCallback(
+    async (stream: MediaStream) => {
+      if (!webrtcManagerRef.current || !isInitialized) {
+        logger.warn('Cannot add screen share: WebRTC not initialized');
+        return false;
+      }
+
+      try {
+        logger.info('Adding screen share track to WebRTC connection');
+        return await webrtcManagerRef.current.addScreenShareTrack(stream);
+      } catch (error) {
+        logger.error('Error adding screen share track:', error);
+        return false;
+      }
+    },
+    [isInitialized, logger]
+  );
+
+  // Remove screen share track
+  const removeScreenShareTrack = useCallback(
+    () => {
+      if (!webrtcManagerRef.current || !isInitialized) {
+        logger.warn('Cannot remove screen share: WebRTC not initialized');
+        return false;
+      }
+
+      try {
+        logger.info('Removing screen share track from WebRTC connection');
+        return webrtcManagerRef.current.removeScreenShareTrack();
+      } catch (error) {
+        logger.error('Error removing screen share track:', error);
+        return false;
+      }
+    },
+    [isInitialized, logger]
+  );
+
   return {
     // Stream state
     remoteStreams,
@@ -236,6 +398,7 @@ export function useWebRTC(localStream: MediaStream | null, options: UseWebRTCOpt
     // Connection state
     isInitialized,
     webrtcError,
+    isRenegotiating,
 
     // Connection methods
     processOffer,
@@ -250,6 +413,19 @@ export function useWebRTC(localStream: MediaStream | null, options: UseWebRTCOpt
 
     // Peer management
     removePeer,
+
+    // Track management
+    addTrack,
+    removeTrack,
+    replaceTrack,
+    toggleTrack,
+    
+    // Screen share
+    addScreenShareTrack,
+    removeScreenShareTrack,
+
+    // Renegotiation
+    handleRenegotiation,
 
     // Reference to the manager (for advanced use cases)
     webrtcManager: webrtcManagerRef.current,

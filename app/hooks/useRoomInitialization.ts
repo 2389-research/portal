@@ -143,6 +143,33 @@ export function useRoomInitialization(
         ]
       );
     },
+    // Handle renegotiation needed events
+    onRenegotiationNeeded: async (connectionId) => {
+      logger.info('WebRTC renegotiation needed for connection ID:', connectionId);
+      
+      if (webrtc.handleRenegotiation && signaling.connected) {
+        try {
+          // Generate a new offer for renegotiation
+          const result = await webrtc.handleRenegotiation();
+          
+          if (result) {
+            // Broadcast the renegotiation offer to all peers in the room
+            logger.info('Sending renegotiation offer');
+            await signaling.sendMessage('webrtc-offer', result.offer, undefined, undefined, undefined, { 
+              connectionId: result.connectionId,
+              isRenegotiation: true
+            });
+          }
+        } catch (error) {
+          logger.error('Error handling WebRTC renegotiation:', error);
+        }
+      }
+    },
+    // Handle track removals
+    onTrackRemoved: (trackId, peerId) => {
+      logger.info(`Remote track ${trackId} was removed from peer ${peerId}`);
+      // Update UI if needed when tracks are removed
+    }
   });
 
   // Signaling hook (depends on auth.apiClient and roomId)
@@ -334,6 +361,13 @@ export function useRoomInitialization(
         // Extract the connection ID from the message
         const connectionId = message.connectionId || (message.data && message.data.connectionId);
         
+        // Check if this is a renegotiation offer
+        const isRenegotiation = message.isRenegotiation || (message.data && message.data.isRenegotiation);
+        
+        if (isRenegotiation) {
+          logger.info('Received renegotiation offer with connection ID:', connectionId);
+        }
+        
         if (!connectionId) {
           logger.warn('Received offer without connection ID, generating a fallback ID');
           // Generate a fallback ID if none was provided (for backward compatibility)
@@ -343,15 +377,21 @@ export function useRoomInitialization(
           const answer = await webrtc.processOffer(message.data, fallbackId);
           if (answer) {
             // Send answer with the fallback connection ID
-            await signaling.sendMessage('webrtc-answer', answer.answer, message.sender, undefined, undefined, { connectionId: fallbackId });
+            await signaling.sendMessage('webrtc-answer', answer.answer, message.sender, undefined, undefined, { 
+              connectionId: fallbackId,
+              isRenegotiation
+            });
           }
         } else {
-          logger.info('Processing offer with connection ID:', connectionId);
+          logger.info(`Processing ${isRenegotiation ? 'renegotiation ' : ''}offer with connection ID:`, connectionId);
           const answer = await webrtc.processOffer(message.data, connectionId);
           
           if (answer) {
             // Send answer with same connection ID from the offer
-            await signaling.sendMessage('webrtc-answer', answer.answer, message.sender, undefined, undefined, { connectionId });
+            await signaling.sendMessage('webrtc-answer', answer.answer, message.sender, undefined, undefined, { 
+              connectionId,
+              isRenegotiation
+            });
           }
         }
       } catch (error) {
@@ -367,13 +407,26 @@ export function useRoomInitialization(
         // Extract the connection ID from the message
         const connectionId = message.connectionId || (message.data && message.data.connectionId);
         
+        // Check if this is a response to a renegotiation offer
+        const isRenegotiation = message.isRenegotiation || (message.data && message.data.isRenegotiation);
+        
+        if (isRenegotiation) {
+          logger.info('Received answer for renegotiation with connection ID:', connectionId);
+        }
+        
         if (!connectionId) {
           logger.warn('Received answer without connection ID, using default connection');
           // For backward compatibility, still process the answer
           await webrtc.processAnswer(message.data, webrtc.webrtcManager?.getCurrentConnectionId() || 'default');
         } else {
-          logger.info('Processing answer with connection ID:', connectionId);
+          logger.info(`Processing ${isRenegotiation ? 'renegotiation ' : ''}answer with connection ID:`, connectionId);
           await webrtc.processAnswer(message.data, connectionId);
+          
+          // If this was a renegotiation, we need to complete the process
+          if (isRenegotiation && webrtc.webrtcManager) {
+            logger.info('Completing renegotiation after receiving answer');
+            await webrtc.webrtcManager.completeRenegotiation();
+          }
         }
       } catch (error) {
         logger.error('Error processing answer:', error);
