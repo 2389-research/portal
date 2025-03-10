@@ -42,11 +42,18 @@ export class MediaManager {
   public async initialize(
     options: MediaOptions = { video: true, audio: true }
   ): Promise<MediaStream> {
+    // If we already have a stream, don't create another permission prompt
+    if (this.stream) {
+      logger.info('Stream already exists, reusing existing media stream');
+      return this.stream;
+    }
+    
     // Default both audio and video if not specified
     const mergedOptions: MediaOptions = {
       video: options.video !== undefined ? options.video : true,
       audio: options.audio !== undefined ? options.audio : true,
     };
+    
     try {
       logger.info('Initializing media devices with options:', mergedOptions);
 
@@ -56,9 +63,11 @@ export class MediaManager {
         throw new Error('Media devices not supported in this browser. Please try another browser.');
       }
 
-      // Try to get user media with provided options
+      // Try to get user media with provided options - only make ONE request
       try {
         logger.debug('Requesting user media with constraints:', mergedOptions);
+        
+        // Make a single getUserMedia request
         this.stream = await navigator.mediaDevices.getUserMedia(
           mergedOptions as MediaStreamConstraints
         );

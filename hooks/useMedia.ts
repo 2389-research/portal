@@ -53,37 +53,8 @@ export function useMedia(options: UseMediaOptions = {}) {
         // Use a more reasonable timeout of 15 seconds
         const MEDIA_TIMEOUT_MS = 15000;
 
-        // Check if there's a previous media error to help avoid repeating failures
-        const mediaStatusCheck = new Promise<boolean>((resolve, reject) => {
-          if (typeof navigator !== 'undefined' && typeof navigator.mediaDevices === 'undefined') {
-            logger.error('MediaDevices API not available in this browser');
-            reject(new Error('Camera and microphone not supported in this browser'));
-            return;
-          }
-          
-          // If we're in a cross-origin iframe or have security restrictions
-          if (typeof navigator !== 'undefined' && navigator.mediaDevices && 
-              typeof navigator.mediaDevices.getUserMedia === 'function') {
-            // Do a quick test to see if we can access the API at all
-            navigator.mediaDevices.getUserMedia({ audio: true })
-              .then(testStream => {
-                // Successfully got a test stream, clean it up
-                testStream.getTracks().forEach(track => track.stop());
-                resolve(true);
-              })
-              .catch(err => {
-                logger.warn('Quick audio check failed, permissions might be blocked:', err);
-                // Don't reject completely yet, the full initialization will handle error details
-                resolve(false);
-              });
-          } else {
-            logger.warn('MediaDevices getUserMedia API not available');
-            resolve(false);
-          }
-        });
-
-        // Wait for status check first, but continue anyway to get a more specific error
-        await mediaStatusCheck;
+        // Skip additional permission checks - we'll only request media once
+        // The multiple permission prompts were causing the flapping behavior
         
         // Initialize media with a promise race to avoid hanging
         const mediaPromise = mediaManagerRef.current.initialize({ video: true, audio: true });

@@ -144,11 +144,11 @@ export function useRoomInitialization(
 
     logger.info('Setting up phase timeouts');
 
-    // Phase-specific timeouts - reduced media and WebRTC timeouts
+    // Phase-specific timeouts - increased timeouts for media to prevent overlapping permission prompts
     const phaseTimeouts = {
       auth: 15000, // 15 seconds for auth
-      media: 15000, // 15 seconds for media (short since useMedia also has its own timeout)
-      webrtc: 10000, // 10 seconds for WebRTC
+      media: 30000, // 30 seconds for media to prevent flapping
+      webrtc: 15000, // 15 seconds for WebRTC
       signaling: 30000, // 30 seconds for signaling
       chat: 15000, // 15 seconds for chat
     };
