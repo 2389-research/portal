@@ -79,16 +79,19 @@ export function useWebRTC(localStream: MediaStream | null, options: UseWebRTCOpt
 
   // Process an incoming WebRTC offer
   const processOffer = useCallback(
-    async (offer: RTCSessionDescriptionInit) => {
+    async (offer: RTCSessionDescriptionInit, connectionId: string) => {
       if (!webrtcManagerRef.current || !isInitialized) {
         logger.warn('Cannot process offer: WebRTC not initialized');
         return null;
       }
 
       try {
-        logger.info('Processing WebRTC offer');
-        const answer = await webrtcManagerRef.current.processOffer(offer);
-        return answer;
+        logger.info('Processing WebRTC offer with connection ID:', connectionId);
+        const result = await webrtcManagerRef.current.processOffer(offer, connectionId);
+        return { 
+          answer: result.answer, 
+          connectionId: result.connectionId 
+        };
       } catch (error) {
         logger.error('Error processing offer:', error);
         return null;
@@ -99,15 +102,15 @@ export function useWebRTC(localStream: MediaStream | null, options: UseWebRTCOpt
 
   // Process an incoming WebRTC answer
   const processAnswer = useCallback(
-    async (answer: RTCSessionDescriptionInit) => {
+    async (answer: RTCSessionDescriptionInit, connectionId: string) => {
       if (!webrtcManagerRef.current || !isInitialized) {
         logger.warn('Cannot process answer: WebRTC not initialized');
         return false;
       }
 
       try {
-        logger.info('Processing WebRTC answer');
-        await webrtcManagerRef.current.processAnswer(answer);
+        logger.info('Processing WebRTC answer with connection ID:', connectionId);
+        await webrtcManagerRef.current.processAnswer(answer, connectionId);
         return true;
       } catch (error) {
         logger.error('Error processing answer:', error);
@@ -126,8 +129,11 @@ export function useWebRTC(localStream: MediaStream | null, options: UseWebRTCOpt
 
     try {
       logger.info('Creating WebRTC offer');
-      const offer = await webrtcManagerRef.current.createOffer();
-      return offer;
+      const result = await webrtcManagerRef.current.createOffer();
+      return { 
+        offer: result.offer, 
+        connectionId: result.connectionId 
+      };
     } catch (error) {
       logger.error('Error creating offer:', error);
       return null;
@@ -136,17 +142,17 @@ export function useWebRTC(localStream: MediaStream | null, options: UseWebRTCOpt
 
   // Add an ICE candidate from a peer
   const addIceCandidate = useCallback(
-    async (candidate: RTCIceCandidateInit) => {
+    async (candidate: RTCIceCandidateInit, connectionId: string) => {
       if (!webrtcManagerRef.current || !isInitialized) {
         logger.warn('Cannot add ICE candidate: WebRTC not initialized');
         return false;
       }
 
       try {
-        logger.info('Adding ICE candidate');
+        logger.info('Adding ICE candidate with connection ID:', connectionId);
         // Create a proper RTCIceCandidate object
         const iceCandidate = new RTCIceCandidate(candidate);
-        await webrtcManagerRef.current.addIceCandidate(iceCandidate);
+        await webrtcManagerRef.current.addIceCandidate(iceCandidate, connectionId);
         return true;
       } catch (error) {
         logger.error('Error adding ICE candidate:', error);
@@ -158,7 +164,7 @@ export function useWebRTC(localStream: MediaStream | null, options: UseWebRTCOpt
 
   // Set ice candidate handler
   const setOnIceCandidate = useCallback(
-    (handler: (candidate: RTCIceCandidateInit) => void) => {
+    (handler: (candidate: RTCIceCandidateInit, connectionId: string) => void) => {
       if (!webrtcManagerRef.current) {
         logger.warn('Cannot set ICE candidate handler: WebRTC not initialized');
         return false;

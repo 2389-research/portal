@@ -161,9 +161,14 @@ export function useRoomInitialization(
       if (webrtc.isInitialized && webrtc.createOffer) {
         (async () => {
           try {
-            const offer = await webrtc.createOffer();
-            if (offer && signaling.sendMessage) {
-              await signaling.sendMessage('webrtc-offer', offer, userId);
+            const result = await webrtc.createOffer();
+            if (result && signaling.sendMessage) {
+              // Extract the offer and connection ID
+              const { offer, connectionId } = result;
+              logger.info('Created offer with connection ID:', connectionId);
+              
+              // Send the offer with the connection ID
+              await signaling.sendMessage('webrtc-offer', offer, userId, undefined, undefined, { connectionId });
             }
           } catch (error) {
             logger.error('Error creating offer for new user:', error);
@@ -326,9 +331,28 @@ export function useRoomInitialization(
       try {
         if (!webrtc.processOffer) return;
 
-        const answer = await webrtc.processOffer(message.data);
-        if (answer) {
-          await signaling.sendMessage('webrtc-answer', answer, message.sender);
+        // Extract the connection ID from the message
+        const connectionId = message.connectionId || (message.data && message.data.connectionId);
+        
+        if (!connectionId) {
+          logger.warn('Received offer without connection ID, generating a fallback ID');
+          // Generate a fallback ID if none was provided (for backward compatibility)
+          const fallbackId = Math.random().toString(36).substring(2, 15);
+          logger.info('Using fallback connection ID:', fallbackId);
+          
+          const answer = await webrtc.processOffer(message.data, fallbackId);
+          if (answer) {
+            // Send answer with the fallback connection ID
+            await signaling.sendMessage('webrtc-answer', answer.answer, message.sender, undefined, undefined, { connectionId: fallbackId });
+          }
+        } else {
+          logger.info('Processing offer with connection ID:', connectionId);
+          const answer = await webrtc.processOffer(message.data, connectionId);
+          
+          if (answer) {
+            // Send answer with same connection ID from the offer
+            await signaling.sendMessage('webrtc-answer', answer.answer, message.sender, undefined, undefined, { connectionId });
+          }
         }
       } catch (error) {
         logger.error('Error processing offer:', error);
@@ -339,7 +363,18 @@ export function useRoomInitialization(
     const handleAnswer = async (message: any) => {
       try {
         if (!webrtc.processAnswer) return;
-        await webrtc.processAnswer(message.data);
+        
+        // Extract the connection ID from the message
+        const connectionId = message.connectionId || (message.data && message.data.connectionId);
+        
+        if (!connectionId) {
+          logger.warn('Received answer without connection ID, using default connection');
+          // For backward compatibility, still process the answer
+          await webrtc.processAnswer(message.data, webrtc.webrtcManager?.getCurrentConnectionId() || 'default');
+        } else {
+          logger.info('Processing answer with connection ID:', connectionId);
+          await webrtc.processAnswer(message.data, connectionId);
+        }
       } catch (error) {
         logger.error('Error processing answer:', error);
       }
@@ -349,7 +384,18 @@ export function useRoomInitialization(
     const handleIceCandidate = async (message: any) => {
       try {
         if (!webrtc.addIceCandidate) return;
-        await webrtc.addIceCandidate(message.data);
+        
+        // Extract the connection ID from the message
+        const connectionId = message.connectionId || (message.data && message.data.connectionId);
+        
+        if (!connectionId) {
+          logger.warn('Received ICE candidate without connection ID, using default connection');
+          // For backward compatibility, still process the candidate with the current connection ID
+          await webrtc.addIceCandidate(message.data, webrtc.webrtcManager?.getCurrentConnectionId() || 'default');
+        } else {
+          logger.info('Adding ICE candidate with connection ID:', connectionId);
+          await webrtc.addIceCandidate(message.data, connectionId);
+        }
       } catch (error) {
         logger.error('Error adding ICE candidate:', error);
       }
@@ -362,8 +408,9 @@ export function useRoomInitialization(
 
     // Setup ICE candidate handler
     if (webrtc.setOnIceCandidate) {
-      webrtc.setOnIceCandidate(async (candidate) => {
-        await signaling.sendMessage('ice-candidate', candidate);
+      webrtc.setOnIceCandidate(async (candidate, connectionId) => {
+        // Send ICE candidate with the connection ID
+        await signaling.sendMessage('ice-candidate', candidate, undefined, undefined, undefined, { connectionId });
       });
     }
 
