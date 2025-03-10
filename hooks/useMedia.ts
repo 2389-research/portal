@@ -50,15 +50,48 @@ export function useMedia(options: UseMediaOptions = {}) {
         logger.info('Initializing camera and microphone');
         mediaManagerRef.current = new MediaManager();
 
-        // Increase the timeout to 45 seconds for better browser compatibility
-        const MEDIA_TIMEOUT_MS = 45000;
+        // Use a more reasonable timeout of 15 seconds
+        const MEDIA_TIMEOUT_MS = 15000;
 
+        // Check if there's a previous media error to help avoid repeating failures
+        const mediaStatusCheck = new Promise<boolean>((resolve, reject) => {
+          if (typeof navigator !== 'undefined' && typeof navigator.mediaDevices === 'undefined') {
+            logger.error('MediaDevices API not available in this browser');
+            reject(new Error('Camera and microphone not supported in this browser'));
+            return;
+          }
+          
+          // If we're in a cross-origin iframe or have security restrictions
+          if (typeof navigator !== 'undefined' && navigator.mediaDevices && 
+              typeof navigator.mediaDevices.getUserMedia === 'function') {
+            // Do a quick test to see if we can access the API at all
+            navigator.mediaDevices.getUserMedia({ audio: true })
+              .then(testStream => {
+                // Successfully got a test stream, clean it up
+                testStream.getTracks().forEach(track => track.stop());
+                resolve(true);
+              })
+              .catch(err => {
+                logger.warn('Quick audio check failed, permissions might be blocked:', err);
+                // Don't reject completely yet, the full initialization will handle error details
+                resolve(false);
+              });
+          } else {
+            logger.warn('MediaDevices getUserMedia API not available');
+            resolve(false);
+          }
+        });
+
+        // Wait for status check first, but continue anyway to get a more specific error
+        await mediaStatusCheck;
+        
         // Initialize media with a promise race to avoid hanging
         const mediaPromise = mediaManagerRef.current.initialize({ video: true, audio: true });
 
         // Create a media timeout promise
         const mediaTimeoutPromise = new Promise((_, reject) => {
           setTimeout(() => {
+            logger.warn(`Media initialization timed out after ${MEDIA_TIMEOUT_MS / 1000} seconds`);
             reject(
               new Error(`Media initialization timed out after ${MEDIA_TIMEOUT_MS / 1000} seconds`)
             );

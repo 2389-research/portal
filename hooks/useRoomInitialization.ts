@@ -49,72 +49,19 @@ export function useRoomInitialization(
     onMediaError: (error) => {
       logger.error('Media error:', error);
 
-      // Check for timeout errors specifically
+      // For timeout, permission, or any other media errors, don't show alerts anymore
+      // but let the user handle it through the UI's "Continue Without Camera/Mic" button
       if (error.includes('timed out')) {
-        logger.warn('Media initialization timed out, offering to continue without media');
-
-        // Show alert for media timeout error
-        Alert.alert(
-          'Media Access Timeout',
-          `Camera and microphone initialization is taking too long.\n\nWould you like to continue without video and audio?`,
-          [
-            {
-              text: 'No, go back',
-              style: 'cancel',
-              onPress: () => router.replace('/'),
-            },
-            {
-              text: 'Yes, continue without media',
-              onPress: () => {
-                setSkipMediaAccess(true);
-                moveToPhase('signaling');
-              },
-            },
-          ]
-        );
+        logger.warn('Media initialization timed out, user can continue via UI button');
       } else if (error.includes('denied') || error.includes('permission')) {
-        // Permission errors
-        logger.warn('Media access was denied, offering to continue without media');
-
-        Alert.alert(
-          'Permission Required',
-          `You need to allow camera and microphone access to use video chat.\n\nWould you like to continue in text-only mode?`,
-          [
-            {
-              text: 'No, go back',
-              style: 'cancel',
-              onPress: () => router.replace('/'),
-            },
-            {
-              text: 'Yes, continue without media',
-              onPress: () => {
-                setSkipMediaAccess(true);
-                moveToPhase('signaling');
-              },
-            },
-          ]
-        );
+        logger.warn('Media access was denied, user can continue via UI button');
       } else {
-        // Generic errors
-        Alert.alert(
-          'Media Access Error',
-          `${error}\n\nWould you like to continue without camera/microphone access?`,
-          [
-            {
-              text: 'No, go back',
-              style: 'cancel',
-              onPress: () => router.replace('/'),
-            },
-            {
-              text: 'Yes, continue without media',
-              onPress: () => {
-                setSkipMediaAccess(true);
-                moveToPhase('signaling');
-              },
-            },
-          ]
-        );
+        logger.warn('Media error occurred, user can continue via UI button:', error);
       }
+      
+      // Stay in the media phase, but enable the UI to show the skip button
+      // We don't automatically move to the signaling phase or show alerts
+      // This prevents flickering caused by alerts and allows more UI control
     },
   });
 
@@ -123,25 +70,12 @@ export function useRoomInitialization(
     skipWebRTC: skipMediaAccess,
     onWebRTCError: (error) => {
       logger.error('WebRTC error:', error);
-
-      // Show alert for WebRTC error
-      Alert.alert(
-        'WebRTC Setup Error',
-        `${error}\n\nWould you like to continue without video connection?`,
-        [
-          {
-            text: 'No, keep trying',
-            style: 'cancel',
-          },
-          {
-            text: 'Yes, skip video',
-            onPress: () => {
-              setSkipMediaAccess(true);
-              moveToPhase('signaling');
-            },
-          },
-        ]
-      );
+      
+      // No alerts, let user continue via UI button
+      logger.warn('WebRTC error occurred, user can continue via UI button');
+      
+      // Stay in current phase, let UI handle the skip action
+      // This prevents flickering caused by alerts
     },
   });
 
@@ -210,13 +144,13 @@ export function useRoomInitialization(
 
     logger.info('Setting up phase timeouts');
 
-    // Phase-specific timeouts
+    // Phase-specific timeouts - reduced media and WebRTC timeouts
     const phaseTimeouts = {
-      auth: 30000, // 30 seconds for auth
-      media: 30000, // 30 seconds for media
-      webrtc: 30000, // 30 seconds for WebRTC
+      auth: 15000, // 15 seconds for auth
+      media: 15000, // 15 seconds for media (short since useMedia also has its own timeout)
+      webrtc: 10000, // 10 seconds for WebRTC
       signaling: 30000, // 30 seconds for signaling
-      chat: 20000, // 20 seconds for chat
+      chat: 15000, // 15 seconds for chat
     };
 
     // Create a timeout watcher function
@@ -236,39 +170,15 @@ export function useRoomInitialization(
               break;
 
             case 'media':
-              // For media phase, offer to skip media access
-              Alert.alert(
-                'Media Initialization Timeout',
-                'Camera and microphone are taking too long to initialize. Would you like to continue without media?',
-                [
-                  { text: 'No, keep trying', style: 'cancel' },
-                  {
-                    text: 'Yes, skip media',
-                    onPress: () => {
-                      setSkipMediaAccess(true);
-                      moveToPhase('signaling');
-                    },
-                  },
-                ]
-              );
+              // For media phase, just log the timeout but don't show alerts
+              // The user can use the UI button to skip media
+              logger.warn('Media initialization timeout reached - user can continue using UI button');
               break;
 
             case 'webrtc':
-              // For WebRTC phase, offer to skip WebRTC
-              Alert.alert(
-                'WebRTC Initialization Timeout',
-                'Video connection setup is taking too long. Would you like to continue without video?',
-                [
-                  { text: 'No, keep trying', style: 'cancel' },
-                  {
-                    text: 'Yes, skip video',
-                    onPress: () => {
-                      setSkipMediaAccess(true);
-                      moveToPhase('signaling');
-                    },
-                  },
-                ]
-              );
+              // For WebRTC phase, just log the timeout but don't show alerts
+              // The user can use the UI button to skip WebRTC
+              logger.warn('WebRTC initialization timeout reached - user can continue using UI button');
               break;
 
             case 'signaling':

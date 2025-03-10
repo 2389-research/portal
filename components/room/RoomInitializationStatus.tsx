@@ -69,14 +69,19 @@ export const RoomInitializationStatus: React.FC<RoomInitializationStatusProps> =
       </Text>
 
       {(initPhase === 'media' || initPhase === 'webrtc') && (
-        <Button
-          style={styles.skipButton}
-          appearance="outline"
-          status="basic"
-          onPress={onSkipMediaAccess}
-        >
-          Skip Media Access
-        </Button>
+        <>
+          <Text category="p2" appearance="hint" style={styles.troubleshootText}>
+            Taking too long? Check that your browser has permission to use the camera and microphone.
+          </Text>
+          <Button
+            style={styles.skipButton}
+            appearance="filled"
+            status="primary"
+            onPress={onSkipMediaAccess}
+          >
+            Continue Without Camera/Mic
+          </Button>
+        </>
       )}
     </Layout>
   );
@@ -100,6 +105,12 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginHorizontal: 30,
     marginBottom: 20,
+  },
+  troubleshootText: {
+    textAlign: 'center',
+    marginHorizontal: 30,
+    marginBottom: 10,
+    marginTop: 15,
   },
   skipButton: {
     marginTop: 10,
