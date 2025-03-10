@@ -484,9 +484,9 @@ describe('WebRTCManager', () => {
       });
 
       // Verify returned answer and connection ID
-      expect(result).toEqual({ 
+      expect(result).toEqual({
         answer: { type: 'answer', sdp: 'mock-sdp' },
-        connectionId: connectionId
+        connectionId: connectionId,
       });
     });
 

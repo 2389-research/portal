@@ -131,13 +131,13 @@ export class DataChannelManager {
 
     // Log the current state
     this.logger.info('Data channel initial state:', this.dataChannel.readyState);
-    
+
     // Notify about initial state in case it's already open
     if (this.dataChannel.readyState === 'open') {
       this.notifyReadyStateChange(true);
     }
   }
-  
+
   /**
    * Notify all ready state change listeners
    */
@@ -188,19 +188,19 @@ export class DataChannelManager {
   public onMessage(callback: (message: DataChannelMessage) => void): void {
     this.onMessageCallback = callback;
   }
-  
+
   /**
    * Register a callback to be notified when the data channel ready state changes
    */
   public onReadyStateChange(callback: (isReady: boolean) => void): () => void {
     this.onReadyStateChangeCallbacks.push(callback);
-    
+
     // If we already have a data channel, immediately notify with current state
     if (this.dataChannel) {
       const isReady = this.dataChannel.readyState === 'open';
       setTimeout(() => callback(isReady), 0);
     }
-    
+
     // Return a function to unregister this callback
     return () => {
       this.onReadyStateChangeCallbacks = this.onReadyStateChangeCallbacks.filter(
@@ -280,7 +280,7 @@ export class DataChannelManager {
       // Notify listeners that the channel is closed
       this.notifyReadyStateChange(false);
     }
-    
+
     // Clear all callbacks as part of cleanup
     this.onMessageCallback = null;
   }

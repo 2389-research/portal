@@ -1,11 +1,18 @@
 import { Button, Layout, Spinner, Text } from '@ui-kitten/components';
-import type React from 'react';
+import React from 'react';
 import { StyleSheet } from 'react-native';
 import type { InitPhase } from '../../hooks';
 
 interface RoomInitializationStatusProps {
   initPhase: InitPhase;
   onSkipMediaAccess: () => void;
+}
+
+interface PhaseInfo {
+  loadingMessage: string;
+  detailMessage: string;
+  phaseNumber: string;
+  showSkipButton?: boolean;
 }
 
 /**
@@ -15,32 +22,44 @@ export const RoomInitializationStatus: React.FC<RoomInitializationStatusProps> =
   initPhase,
   onSkipMediaAccess,
 }) => {
-  // Get loading message based on current phase
-  let loadingMessage = 'Joining room...';
-  let detailMessage = '';
+  // Define phase information map
+  const phaseInfoMap: Record<InitPhase, PhaseInfo> = {
+    auth: {
+      loadingMessage: 'Checking authentication...',
+      detailMessage: 'Verifying your account before joining the room',
+      phaseNumber: '1/5',
+    },
+    media: {
+      loadingMessage: 'Initializing camera and microphone...',
+      detailMessage: 'This may take a moment. Please allow camera/microphone access if prompted',
+      phaseNumber: '2/5',
+      showSkipButton: true,
+    },
+    webrtc: {
+      loadingMessage: 'Setting up video connection...',
+      detailMessage: 'Establishing peer connections for video chat',
+      phaseNumber: '3/5',
+      showSkipButton: true,
+    },
+    signaling: {
+      loadingMessage: 'Joining room...',
+      detailMessage: 'Connecting to the room and other participants',
+      phaseNumber: '4/5',
+    },
+    chat: {
+      loadingMessage: 'Setting up chat...',
+      detailMessage: 'Almost ready! Setting up text chat functionality',
+      phaseNumber: '5/5',
+    },
+    complete: {
+      loadingMessage: 'Complete!',
+      detailMessage: 'Room initialization complete',
+      phaseNumber: '',
+    },
+  };
 
-  switch (initPhase) {
-    case 'auth':
-      loadingMessage = 'Checking authentication...';
-      detailMessage = 'Verifying your account before joining the room';
-      break;
-    case 'media':
-      loadingMessage = 'Initializing camera and microphone...';
-      detailMessage = 'This may take a moment. Please allow camera/microphone access if prompted';
-      break;
-    case 'webrtc':
-      loadingMessage = 'Setting up video connection...';
-      detailMessage = 'Establishing peer connections for video chat';
-      break;
-    case 'signaling':
-      loadingMessage = 'Joining room...';
-      detailMessage = 'Connecting to the room and other participants';
-      break;
-    case 'chat':
-      loadingMessage = 'Setting up chat...';
-      detailMessage = 'Almost ready! Setting up text chat functionality';
-      break;
-  }
+  // Get phase info based on current phase
+  const { loadingMessage, detailMessage, phaseNumber, showSkipButton } = phaseInfoMap[initPhase];
 
   return (
     <Layout style={styles.loadingContainer}>
@@ -49,29 +68,21 @@ export const RoomInitializationStatus: React.FC<RoomInitializationStatusProps> =
         {loadingMessage}
       </Text>
 
-      <Text category="s1" style={styles.loadingPhase}>
-        Phase{' '}
-        {initPhase === 'auth'
-          ? '1/5'
-          : initPhase === 'media'
-            ? '2/5'
-            : initPhase === 'webrtc'
-              ? '3/5'
-              : initPhase === 'signaling'
-                ? '4/5'
-                : initPhase === 'chat'
-                  ? '5/5'
-                  : ''}
-      </Text>
+      {phaseNumber && (
+        <Text category="s1" style={styles.loadingPhase}>
+          Phase {phaseNumber}
+        </Text>
+      )}
 
       <Text category="c1" appearance="hint" style={styles.loadingHint}>
         {detailMessage}
       </Text>
 
-      {(initPhase === 'media' || initPhase === 'webrtc') && (
+      {showSkipButton && (
         <>
           <Text category="p2" appearance="hint" style={styles.troubleshootText}>
-            Taking too long? Check that your browser has permission to use the camera and microphone.
+            Taking too long? Check that your browser has permission to use the camera and
+            microphone.
           </Text>
           <Button
             style={styles.skipButton}

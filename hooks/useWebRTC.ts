@@ -14,12 +14,7 @@ interface UseWebRTCOptions {
  */
 export function useWebRTC(localStream: MediaStream | null, options: UseWebRTCOptions = {}) {
   const logger = createLogger('useWebRTC');
-  const { 
-    skipWebRTC = false, 
-    onWebRTCError,
-    onRenegotiationNeeded,
-    onTrackRemoved 
-  } = options;
+  const { skipWebRTC = false, onWebRTCError, onRenegotiationNeeded, onTrackRemoved } = options;
 
   // WebRTC state
   const [remoteStreams, setRemoteStreams] = useState<Map<string, MediaStream>>(new Map());
@@ -32,18 +27,32 @@ export function useWebRTC(localStream: MediaStream | null, options: UseWebRTCOpt
 
   // Initialize WebRTC when local stream is available
   useEffect(() => {
+    // Skip if explicitly told to or if no local stream
     if (skipWebRTC || !localStream) {
+      return;
+    }
+
+    // Don't re-initialize if already set up
+    if (webrtcManagerRef.current && isInitialized) {
+      logger.info('WebRTC already initialized, skipping initialization');
       return;
     }
 
     const initWebRTC = async () => {
       try {
         logger.info('Initializing WebRTC');
-        webrtcManagerRef.current = new WebRTCManager();
+
+        // Only create a new WebRTCManager if it doesn't exist
+        if (!webrtcManagerRef.current) {
+          logger.info('Creating new WebRTCManager instance');
+          webrtcManagerRef.current = new WebRTCManager();
+        } else {
+          logger.info('Reusing existing WebRTCManager instance');
+        }
 
         // Initialize WebRTC with the local stream
         await webrtcManagerRef.current.initialize(localStream);
-        logger.info('WebRTC initialized');
+        logger.info('WebRTC initialized successfully');
         setIsInitialized(true);
 
         // Setup WebRTC callbacks
@@ -55,12 +64,13 @@ export function useWebRTC(localStream: MediaStream | null, options: UseWebRTCOpt
             return newStreams;
           });
         });
-        
+
         // Setup negotiation needed callback
-        webrtcManagerRef.current.setOnNegotiationNeeded((connectionId) => {
+        webrtcManagerRef.current.setOnNegotiationNeeded(() => {
+          const connectionId = webrtcManagerRef.current?.getCurrentConnectionId() || 'unknown';
           logger.info('Negotiation needed for connection:', connectionId);
           setIsRenegotiating(true);
-          
+
           if (onRenegotiationNeeded) {
             onRenegotiationNeeded(connectionId);
           } else {
@@ -68,7 +78,7 @@ export function useWebRTC(localStream: MediaStream | null, options: UseWebRTCOpt
             handleRenegotiation();
           }
         });
-        
+
         // Setup track removed callback
         if (onTrackRemoved) {
           webrtcManagerRef.current.setOnTrackRemoved((trackId, peerId) => {
@@ -78,12 +88,19 @@ export function useWebRTC(localStream: MediaStream | null, options: UseWebRTCOpt
         }
       } catch (error: unknown) {
         logger.error('WebRTC initialization error:', error);
+
+        // Format error message
         const errorMessage =
           error instanceof Error
             ? error.message
             : typeof error === 'object' && error !== null && 'message' in error
               ? (error as { message: string }).message
               : 'Failed to initialize WebRTC';
+
+        // Log more details for debugging
+        if (errorMessage.includes('so many PeerConnections')) {
+          logger.error('Too many PeerConnection instances created - browser limit reached');
+        }
 
         setWebRTCError(errorMessage);
 
@@ -93,18 +110,39 @@ export function useWebRTC(localStream: MediaStream | null, options: UseWebRTCOpt
       }
     };
 
+    // Track if WebRTC initialization has been attempted
+    const webrtcInitKey = 'webrtc-init-attempted';
+
+    // Check if this is the first initialization attempt
+    if (!window.sessionStorage.getItem(webrtcInitKey)) {
+      logger.info('First WebRTC initialization attempt');
+      window.sessionStorage.setItem(webrtcInitKey, 'true');
+    } else if (!isInitialized) {
+      logger.info('Subsequent WebRTC initialization attempt');
+    }
+
+    // Attempt initialization
     initWebRTC();
 
-    // Cleanup on unmount or when local stream changes
+    // Cleanup on unmount or when dependencies change
     return () => {
-      if (webrtcManagerRef.current) {
-        logger.info('Closing WebRTC connections');
+      // Only close if we're explicitly told to skip WebRTC or if component is unmounting completely
+      if (webrtcManagerRef.current && skipWebRTC) {
+        logger.info('Closing WebRTC connections due to skipWebRTC change');
         webrtcManagerRef.current.close();
         setRemoteStreams(new Map());
         setIsInitialized(false);
       }
     };
-  }, [localStream, skipWebRTC, logger, onWebRTCError, onRenegotiationNeeded, onTrackRemoved]);
+  }, [
+    localStream,
+    skipWebRTC,
+    logger,
+    onWebRTCError,
+    onRenegotiationNeeded,
+    onTrackRemoved,
+    isInitialized,
+  ]);
 
   // Process an incoming WebRTC offer
   const processOffer = useCallback(
@@ -117,9 +155,9 @@ export function useWebRTC(localStream: MediaStream | null, options: UseWebRTCOpt
       try {
         logger.info('Processing WebRTC offer with connection ID:', connectionId);
         const result = await webrtcManagerRef.current.processOffer(offer, connectionId);
-        return { 
-          answer: result.answer, 
-          connectionId: result.connectionId 
+        return {
+          answer: result.answer,
+          connectionId: result.connectionId,
         };
       } catch (error) {
         logger.error('Error processing offer:', error);
@@ -159,9 +197,9 @@ export function useWebRTC(localStream: MediaStream | null, options: UseWebRTCOpt
     try {
       logger.info('Creating WebRTC offer');
       const result = await webrtcManagerRef.current.createOffer();
-      return { 
-        offer: result.offer, 
-        connectionId: result.connectionId 
+      return {
+        offer: result.offer,
+        connectionId: result.connectionId,
       };
     } catch (error) {
       logger.error('Error creating offer:', error);
@@ -279,7 +317,11 @@ export function useWebRTC(localStream: MediaStream | null, options: UseWebRTCOpt
 
   // Add a track to the peer connection
   const addTrack = useCallback(
-    async (track: MediaStreamTrack, stream: MediaStream, type: 'audio' | 'video' | 'screen' = 'video') => {
+    async (
+      track: MediaStreamTrack,
+      stream: MediaStream,
+      type: 'audio' | 'video' | 'screen' = 'video'
+    ) => {
       if (!webrtcManagerRef.current || !isInitialized) {
         logger.warn('Cannot add track: WebRTC not initialized');
         return false;
@@ -373,23 +415,20 @@ export function useWebRTC(localStream: MediaStream | null, options: UseWebRTCOpt
   );
 
   // Remove screen share track
-  const removeScreenShareTrack = useCallback(
-    () => {
-      if (!webrtcManagerRef.current || !isInitialized) {
-        logger.warn('Cannot remove screen share: WebRTC not initialized');
-        return false;
-      }
+  const removeScreenShareTrack = useCallback(() => {
+    if (!webrtcManagerRef.current || !isInitialized) {
+      logger.warn('Cannot remove screen share: WebRTC not initialized');
+      return false;
+    }
 
-      try {
-        logger.info('Removing screen share track from WebRTC connection');
-        return webrtcManagerRef.current.removeScreenShareTrack();
-      } catch (error) {
-        logger.error('Error removing screen share track:', error);
-        return false;
-      }
-    },
-    [isInitialized, logger]
-  );
+    try {
+      logger.info('Removing screen share track from WebRTC connection');
+      return webrtcManagerRef.current.removeScreenShareTrack();
+    } catch (error) {
+      logger.error('Error removing screen share track:', error);
+      return false;
+    }
+  }, [isInitialized, logger]);
 
   return {
     // Stream state
@@ -419,7 +458,7 @@ export function useWebRTC(localStream: MediaStream | null, options: UseWebRTCOpt
     removeTrack,
     replaceTrack,
     toggleTrack,
-    
+
     // Screen share
     addScreenShareTrack,
     removeScreenShareTrack,

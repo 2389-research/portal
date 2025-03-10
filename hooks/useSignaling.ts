@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { createLogger } from '../services/logger';
-import { SignalingService, type SignalingMessage as ServiceSignalingMessage } from '../services/signaling';
+import {
+  SignalingService,
+  type SignalingMessage as ServiceSignalingMessage,
+} from '../services/signaling';
 
 // Import and use the SignalingMessage type from the service
 export type SignalingMessage = ServiceSignalingMessage;
@@ -187,14 +190,28 @@ export function useSignaling(
 
   // Send a message
   const sendMessage = useCallback(
-    async (type: string, data: any, recipient?: string, forceRoomId?: string, forceSenderId?: string, extraFields?: Record<string, any>) => {
+    async (
+      type: string,
+      data: any,
+      recipient?: string,
+      forceRoomId?: string,
+      forceSenderId?: string,
+      extraFields?: Record<string, any>
+    ) => {
       if (!signalingServiceRef.current || !connected) {
         logger.warn('Cannot send message: Not connected to room');
         return false;
       }
 
       try {
-        await signalingServiceRef.current.sendMessage(type, data, recipient, forceRoomId, forceSenderId, extraFields);
+        await signalingServiceRef.current.sendMessage(
+          type,
+          data,
+          recipient,
+          forceRoomId,
+          forceSenderId,
+          extraFields
+        );
         return true;
       } catch (error) {
         logger.error('Error sending message:', error);

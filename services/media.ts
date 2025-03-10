@@ -47,13 +47,13 @@ export class MediaManager {
       logger.info('Stream already exists, reusing existing media stream');
       return this.stream;
     }
-    
+
     // Default both audio and video if not specified
     const mergedOptions: MediaOptions = {
       video: options.video !== undefined ? options.video : true,
       audio: options.audio !== undefined ? options.audio : true,
     };
-    
+
     try {
       logger.info('Initializing media devices with options:', mergedOptions);
 
@@ -66,7 +66,7 @@ export class MediaManager {
       // Try to get user media with provided options - only make ONE request
       try {
         logger.debug('Requesting user media with constraints:', mergedOptions);
-        
+
         // Make a single getUserMedia request
         this.stream = await navigator.mediaDevices.getUserMedia(
           mergedOptions as MediaStreamConstraints

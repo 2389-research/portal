@@ -100,7 +100,7 @@ export function useChat(
 
     initChat();
 
-    // Set up a data channel state listener 
+    // Set up a data channel state listener
     if (chatManagerRef.current) {
       // Subscribe to ready state changes
       chatManagerRef.current.onReadyStateChange((isReady) => {

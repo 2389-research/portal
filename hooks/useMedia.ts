@@ -40,27 +40,38 @@ export function useMedia(options: UseMediaOptions = {}) {
 
   // Initialize media
   useEffect(() => {
+    // If media access is being skipped, don't even attempt to initialize
     if (skipMediaAccess) {
       logger.info('Skipping media access as requested');
+      return;
+    }
+
+    // Prevent re-initialization if we already have a media manager or local stream
+    if (mediaManagerRef.current && localStream) {
+      logger.info('Media already initialized, skipping initialization');
       return;
     }
 
     const initMedia = async () => {
       try {
         logger.info('Initializing camera and microphone');
-        mediaManagerRef.current = new MediaManager();
 
-        // Use a more reasonable timeout of 15 seconds
+        // Only create a new MediaManager if one doesn't exist
+        if (!mediaManagerRef.current) {
+          logger.info('Creating new MediaManager instance');
+          mediaManagerRef.current = new MediaManager();
+        } else {
+          logger.info('Reusing existing MediaManager instance');
+        }
+
+        // Use a reasonable timeout of 15 seconds
         const MEDIA_TIMEOUT_MS = 15000;
 
-        // Skip additional permission checks - we'll only request media once
-        // The multiple permission prompts were causing the flapping behavior
-        
         // Initialize media with a promise race to avoid hanging
         const mediaPromise = mediaManagerRef.current.initialize({ video: true, audio: true });
 
         // Create a media timeout promise
-        const mediaTimeoutPromise = new Promise((_, reject) => {
+        const mediaTimeoutPromise = new Promise<MediaStream>((_, reject) => {
           setTimeout(() => {
             logger.warn(`Media initialization timed out after ${MEDIA_TIMEOUT_MS / 1000} seconds`);
             reject(
@@ -71,7 +82,7 @@ export function useMedia(options: UseMediaOptions = {}) {
 
         // Race the media initialization against the timeout
         logger.info(`Waiting up to ${MEDIA_TIMEOUT_MS / 1000} seconds for media initialization...`);
-        const stream = (await Promise.race([mediaPromise, mediaTimeoutPromise])) as MediaStream;
+        const stream = await Promise.race([mediaPromise, mediaTimeoutPromise]);
 
         // Set local stream as soon as camera is ready
         logger.info('Camera initialized, setting local stream');
@@ -104,14 +115,17 @@ export function useMedia(options: UseMediaOptions = {}) {
           onMediaError(errorMessage);
         }
 
+        // If we can't access media, set skip flag
         setSkipMediaAccess(true);
       }
     };
 
-    // Check if getUserMedia is supported and permissions are granted
+    // Check if getUserMedia is supported (only once)
     const checkMediaSupport = async () => {
       try {
         logger.info('Checking media support...');
+
+        // Check if the API is available
         if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
           logger.error('getUserMedia not supported in this browser');
           setSkipMediaAccess(true);
@@ -119,39 +133,21 @@ export function useMedia(options: UseMediaOptions = {}) {
           if (onMediaError) {
             onMediaError('Camera and microphone access is not supported in this browser');
           }
-
           return false;
         }
 
         logger.info('Media devices API is available');
 
-        // Try a quick audio-only check to see if we can get any media
+        // Check permissions using the Permissions API if available
         try {
-          logger.info('Attempting basic audio-only check...');
-          const audioOnlyStream = await navigator.mediaDevices.getUserMedia({
-            audio: true,
-            video: false,
-          });
-
-          // If we got a stream, release it immediately
-          if (audioOnlyStream) {
-            audioOnlyStream.getTracks().forEach((track) => track.stop());
-            logger.info('Audio-only check successful');
-          }
-        } catch (audioTestErr) {
-          logger.warn('Audio-only test failed:', audioTestErr);
-          // This might indicate permission issues, but we'll continue with the full test
-        }
-
-        // Try using the Permissions API to check permission status if available
-        try {
-          logger.info('Checking permissions API status...');
           if (navigator.permissions?.query) {
+            logger.info('Checking permissions API status...');
             const cameraPermission = await navigator.permissions.query({ name: 'camera' });
-            logger.info('Camera permission status:', cameraPermission.state);
-
             const micPermission = await navigator.permissions.query({ name: 'microphone' });
-            logger.info('Microphone permission status:', micPermission.state);
+
+            logger.info(
+              `Permission status - Camera: ${cameraPermission.state}, Mic: ${micPermission.state}`
+            );
 
             // If both permissions are denied, skip media access
             if (cameraPermission.state === 'denied' && micPermission.state === 'denied') {
@@ -163,20 +159,12 @@ export function useMedia(options: UseMediaOptions = {}) {
                   'Camera and microphone access was denied. Please check your browser permissions.'
                 );
               }
-
               return false;
             }
-
-            // If permissions are prompt, remind the user to allow them
-            if (cameraPermission.state === 'prompt' || micPermission.state === 'prompt') {
-              logger.info('Permission prompts will be shown to the user');
-            }
-          } else {
-            logger.info('Permissions API not available, cannot pre-check permissions');
           }
         } catch (permErr) {
           logger.info('Error checking permissions API:', permErr);
-          // Continue despite permission check error - we'll handle it during the actual media request
+          // Continue despite permission check error
         }
 
         return true;
@@ -187,29 +175,48 @@ export function useMedia(options: UseMediaOptions = {}) {
         if (onMediaError) {
           onMediaError('An error occurred while checking media support');
         }
-
         return false;
       }
     };
 
+    // Main initialization sequence
     const setup = async () => {
+      // Only check media support and initialize once
+      const setupKey = 'media-setup-attempted';
+      if (window.sessionStorage.getItem(setupKey)) {
+        logger.info('Media setup already attempted in this session, skipping checks');
+
+        // If we don't have a stream already, directly try to initialize
+        if (!localStream && !mediaManagerRef.current) {
+          await initMedia();
+        }
+        return;
+      }
+
+      // Mark that we've attempted setup
+      window.sessionStorage.setItem(setupKey, 'true');
+
+      // Check support and initialize if supported
       const hasMediaSupport = await checkMediaSupport();
       if (hasMediaSupport) {
         await initMedia();
       }
     };
 
+    // Start the setup process
     setup();
 
-    // Cleanup on unmount
+    // Cleanup on unmount or when effects are re-run
     return () => {
-      if (mediaManagerRef.current && localStream) {
-        logger.info('Stopping local stream');
+      // Only clean up the stream if we're unmounting completely
+      // We don't want to stop streams due to re-renders
+      if (mediaManagerRef.current && localStream && skipMediaAccess) {
+        logger.info('Stopping local stream due to skipMediaAccess change');
         mediaManagerRef.current.stopLocalStream(localStream);
         setLocalStream(null);
       }
 
-      // Stop screen sharing
+      // Always stop screen sharing on unmount
       if (screenShareStream) {
         logger.info('Stopping screen share');
         screenShareStream.getTracks().forEach((track) => track.stop());
@@ -217,7 +224,7 @@ export function useMedia(options: UseMediaOptions = {}) {
         setIsScreenSharing(false);
       }
     };
-  }, [skipMediaAccess, logger, onMediaError]);
+  }, [skipMediaAccess, logger, onMediaError, localStream]);
 
   // Handle toggle audio
   const toggleAudio = useCallback(() => {

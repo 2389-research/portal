@@ -24,7 +24,9 @@ export class WebRTCManager {
   private remoteStreams: Map<string, MediaStream> = new Map();
   private dataChannel: RTCDataChannel | null = null;
   private peerConfig: PeerConfig;
-  private onIceCandidateCallback: ((candidate: RTCIceCandidate, connectionId: string) => void) | null = null;
+  private onIceCandidateCallback:
+    | ((candidate: RTCIceCandidate, connectionId: string) => void)
+    | null = null;
   private onNegotiationNeededCallback: ((connectionId: string) => void) | null = null;
   private onTrackCallback: ((stream: MediaStream, peerId: string) => void) | null = null;
   private onDataChannelCallback: ((channel: RTCDataChannel) => void) | null = null;
@@ -73,17 +75,17 @@ export class WebRTCManager {
         if (this.peerConnection) {
           const sender = this.peerConnection.addTrack(track, localStream);
           const trackType = track.kind === 'audio' ? 'audio' : 'video';
-          
+
           // Store the sender for future track operations
           this.localSenders.set(track.id, {
             track,
             sender,
             type: trackType,
-            mediaStream: localStream
+            mediaStream: localStream,
           });
-          
+
           this.logger.info(`Added ${trackType} track to peer connection: ${track.id}`);
-          
+
           // Setup track ended listener to handle cleanup
           track.onended = () => {
             this.logger.info(`Local track ended: ${track.id}`);
@@ -124,9 +126,11 @@ export class WebRTCManager {
         const stream = event.streams[0];
         const peerId = stream.id;
         this.remoteStreams.set(peerId, stream);
-        
-        this.logger.info(`Received remote track: ${event.track.id}, kind: ${event.track.kind} from peer: ${peerId}`);
-        
+
+        this.logger.info(
+          `Received remote track: ${event.track.id}, kind: ${event.track.kind} from peer: ${peerId}`
+        );
+
         // Listen for track ended events
         event.track.onended = () => {
           this.logger.info(`Remote track ended: ${event.track.id} from peer: ${peerId}`);
@@ -134,7 +138,7 @@ export class WebRTCManager {
             this.onTrackRemovedCallback(event.track.id, peerId);
           }
         };
-        
+
         this.onTrackCallback(stream, peerId);
       }
     };
@@ -142,7 +146,7 @@ export class WebRTCManager {
     // Handle connection state changes
     this.peerConnection.onconnectionstatechange = () => {
       this.logger.info('Connection state changed:', this.peerConnection?.connectionState);
-      
+
       if (this.peerConnection?.connectionState === 'failed') {
         this.logger.warn('WebRTC connection failed, may need to restart ICE');
         // In real implementation, may want to handle reconnection logic here
@@ -152,11 +156,11 @@ export class WebRTCManager {
     // Handle ICE connection state changes
     this.peerConnection.oniceconnectionstatechange = () => {
       this.logger.info('ICE connection state changed:', this.peerConnection?.iceConnectionState);
-      
+
       if (this.peerConnection?.iceConnectionState === 'disconnected') {
         this.logger.warn('ICE connection disconnected, may reconnect automatically');
       }
-      
+
       if (this.peerConnection?.iceConnectionState === 'failed') {
         this.logger.warn('ICE connection failed');
       }
@@ -240,25 +244,30 @@ export class WebRTCManager {
 
     const offer = await this.peerConnection.createOffer();
     await this.peerConnection.setLocalDescription(offer);
-    
-    return { 
-      offer: offer, 
-      connectionId: this.currentConnectionId 
+
+    return {
+      offer: offer,
+      connectionId: this.currentConnectionId,
     };
   }
-  
+
   /**
    * Generate a unique connection ID for WebRTC signaling
    */
   private generateConnectionId(): string {
     // Generate a random string to use as connection ID
-    return Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+    return (
+      Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15)
+    );
   }
 
   /**
    * Process an offer received from a remote peer
    */
-  public async processOffer(offer: RTCSessionDescriptionInit, connectionId: string): Promise<{ answer: RTCSessionDescriptionInit; connectionId: string }> {
+  public async processOffer(
+    offer: RTCSessionDescriptionInit,
+    connectionId: string
+  ): Promise<{ answer: RTCSessionDescriptionInit; connectionId: string }> {
     if (!this.peerConnection) {
       throw new Error('Peer connection not initialized');
     }
@@ -270,17 +279,20 @@ export class WebRTCManager {
     await this.peerConnection.setRemoteDescription(new RTCSessionDescription(offer));
     const answer = await this.peerConnection.createAnswer();
     await this.peerConnection.setLocalDescription(answer);
-    
+
     return {
       answer: answer,
-      connectionId: connectionId
+      connectionId: connectionId,
     };
   }
 
   /**
    * Process an answer received from a remote peer
    */
-  public async processAnswer(answer: RTCSessionDescriptionInit, connectionId: string): Promise<void> {
+  public async processAnswer(
+    answer: RTCSessionDescriptionInit,
+    connectionId: string
+  ): Promise<void> {
     if (!this.peerConnection) {
       throw new Error('Peer connection not initialized');
     }
@@ -296,7 +308,7 @@ export class WebRTCManager {
     }
 
     await this.peerConnection.setRemoteDescription(new RTCSessionDescription(answer));
-    
+
     // If we were in the middle of renegotiation, complete it
     if (this.isRenegotiating) {
       this.logger.info('Completing renegotiation after processing answer');
@@ -361,10 +373,12 @@ export class WebRTCManager {
   /**
    * Set callbacks
    */
-  public setOnIceCandidate(callback: (candidate: RTCIceCandidate, connectionId: string) => void): void {
+  public setOnIceCandidate(
+    callback: (candidate: RTCIceCandidate, connectionId: string) => void
+  ): void {
     this.onIceCandidateCallback = callback;
   }
-  
+
   /**
    * Get the current connection ID
    */
@@ -395,7 +409,11 @@ export class WebRTCManager {
    * Add a new track to the peer connection
    * This will trigger renegotiation
    */
-  public async addTrack(track: MediaStreamTrack, stream: MediaStream, type: 'audio' | 'video' | 'screen' = 'video'): Promise<boolean> {
+  public async addTrack(
+    track: MediaStreamTrack,
+    stream: MediaStream,
+    type: 'audio' | 'video' | 'screen' = 'video'
+  ): Promise<boolean> {
     if (!this.peerConnection) {
       this.logger.error('Cannot add track: Peer connection not initialized');
       return false;
@@ -410,17 +428,17 @@ export class WebRTCManager {
 
       // Add the track to the peer connection
       const sender = this.peerConnection.addTrack(track, stream);
-      
+
       // Store the sender for future operations
       this.localSenders.set(track.id, {
         track,
         sender,
         type,
-        mediaStream: stream
+        mediaStream: stream,
       });
-      
+
       this.logger.info(`Added ${type} track to peer connection: ${track.id}`);
-      
+
       // Setup track ended listener
       track.onended = () => {
         this.logger.info(`Track ended: ${track.id}`);
@@ -428,7 +446,7 @@ export class WebRTCManager {
       };
 
       // The negotiationneeded event will trigger automatically
-      
+
       return true;
     } catch (error) {
       this.logger.error('Error adding track:', error);
@@ -455,14 +473,14 @@ export class WebRTCManager {
 
       // Remove the track from the peer connection
       this.peerConnection.removeTrack(senderInfo.sender);
-      
+
       // Remove from our sender map
       this.localSenders.delete(trackId);
-      
+
       this.logger.info(`Removed track: ${trackId}`);
-      
+
       // The negotiationneeded event will trigger automatically
-      
+
       return true;
     } catch (error) {
       this.logger.error('Error removing track:', error);
@@ -489,22 +507,22 @@ export class WebRTCManager {
 
       // Replace the track
       senderInfo.sender.replaceTrack(newTrack);
-      
+
       // Update our sender map with the new track
       this.localSenders.set(newTrack.id, {
         track: newTrack,
         sender: senderInfo.sender,
         type: senderInfo.type,
-        mediaStream: senderInfo.mediaStream
+        mediaStream: senderInfo.mediaStream,
       });
-      
+
       // Remove the old track entry
       if (oldTrackId !== newTrack.id) {
         this.localSenders.delete(oldTrackId);
       }
-      
+
       this.logger.info(`Replaced track ${oldTrackId} with ${newTrack.id}`);
-      
+
       return true;
     } catch (error) {
       this.logger.error('Error replacing track:', error);
@@ -520,7 +538,7 @@ export class WebRTCManager {
       this.logger.error('Cannot toggle track: Peer connection not initialized');
       return false;
     }
-    
+
     let trackEnabled = false;
     let trackFound = false;
 
@@ -530,7 +548,9 @@ export class WebRTCManager {
         trackFound = true;
         senderInfo.track.enabled = !senderInfo.track.enabled;
         trackEnabled = senderInfo.track.enabled;
-        this.logger.info(`Toggled ${type} track ${trackId} to ${trackEnabled ? 'enabled' : 'disabled'}`);
+        this.logger.info(
+          `Toggled ${type} track ${trackId} to ${trackEnabled ? 'enabled' : 'disabled'}`
+        );
       }
     });
 
@@ -569,7 +589,7 @@ export class WebRTCManager {
    */
   public removeScreenShareTrack(): boolean {
     let success = false;
-    
+
     // Find and remove all screen type tracks
     this.localSenders.forEach((senderInfo, trackId) => {
       if (senderInfo.type === 'screen') {
@@ -579,7 +599,7 @@ export class WebRTCManager {
         }
       }
     });
-    
+
     return success;
   }
 
@@ -587,7 +607,10 @@ export class WebRTCManager {
    * Handle renegotiation by creating a new offer
    * Called when tracks are added or removed
    */
-  public async handleRenegotiation(): Promise<{ offer: RTCSessionDescriptionInit; connectionId: string } | null> {
+  public async handleRenegotiation(): Promise<{
+    offer: RTCSessionDescriptionInit;
+    connectionId: string;
+  } | null> {
     if (!this.peerConnection) {
       this.logger.error('Cannot renegotiate: Peer connection not initialized');
       return null;
@@ -597,16 +620,16 @@ export class WebRTCManager {
       // Set the renegotiation flag to handle ICE candidates correctly
       this.isRenegotiating = true;
       this.pendingCandidates = [];
-      
+
       this.logger.info('Starting renegotiation with connection ID:', this.currentConnectionId);
-      
+
       // Create an offer with the current connection ID
       const offer = await this.peerConnection.createOffer();
       await this.peerConnection.setLocalDescription(offer);
-      
+
       return {
         offer: offer,
-        connectionId: this.currentConnectionId || this.generateConnectionId()
+        connectionId: this.currentConnectionId || this.generateConnectionId(),
       };
     } catch (error) {
       this.logger.error('Error during renegotiation:', error);
@@ -620,18 +643,25 @@ export class WebRTCManager {
    * and send any pending ICE candidates
    */
   public async completeRenegotiation(): Promise<void> {
-    if (this.isRenegotiating && this.pendingCandidates.length > 0 && this.onIceCandidateCallback && this.currentConnectionId) {
-      this.logger.info(`Sending ${this.pendingCandidates.length} pending ICE candidates after renegotiation`);
-      
+    if (
+      this.isRenegotiating &&
+      this.pendingCandidates.length > 0 &&
+      this.onIceCandidateCallback &&
+      this.currentConnectionId
+    ) {
+      this.logger.info(
+        `Sending ${this.pendingCandidates.length} pending ICE candidates after renegotiation`
+      );
+
       // Send all pending candidates
       for (const candidate of this.pendingCandidates) {
         this.onIceCandidateCallback(candidate, this.currentConnectionId);
       }
-      
+
       // Clear pending candidates
       this.pendingCandidates = [];
     }
-    
+
     this.isRenegotiating = false;
   }
 }

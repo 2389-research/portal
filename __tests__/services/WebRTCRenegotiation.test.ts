@@ -140,114 +140,114 @@ describe('WebRTCManager Renegotiation', () => {
     test('should add and track new media track', async () => {
       const mockLocalStream = createMockMediaStream('local-stream-id', 'audio1', 'video1');
       const mockSender = createMockSender(null);
-      
+
       // Mock addTrack to return our mock sender
       mockPeerConnection.addTrack.mockReturnValue(mockSender);
-      
+
       // Initialize
       await webrtcManager.initialize(mockLocalStream as unknown as MediaStream);
-      
+
       // Create a new track to add
       const newVideoTrack = createMockMediaTrack('video', 'new-video', 'New Video Track');
       const newStream = createMockMediaStream('new-stream-id', undefined, 'new-video');
-      
+
       // Add the track
       const result = await webrtcManager.addTrack(
-        newVideoTrack as unknown as MediaStreamTrack, 
+        newVideoTrack as unknown as MediaStreamTrack,
         newStream as unknown as MediaStream,
         'video'
       );
-      
+
       // Verify track was added
       expect(result).toBe(true);
       expect(mockPeerConnection.addTrack).toHaveBeenCalledWith(newVideoTrack, newStream);
-      
+
       // Verify onnegotiationneeded should be triggered (but we don't simulate it here)
     });
-    
+
     test('should remove track properly', async () => {
       const mockLocalStream = createMockMediaStream('local-stream-id', 'audio1', 'video1');
-      
+
       // Mock sender object
       const mockSender = createMockSender(mockLocalStream.getVideoTracks()[0]);
-      
+
       // Mock addTrack to return our mock sender
       mockPeerConnection.addTrack.mockReturnValue(mockSender);
-      
+
       // Initialize
       await webrtcManager.initialize(mockLocalStream as unknown as MediaStream);
-      
+
       // Verify the track was added and sender stored internally
       expect(mockPeerConnection.addTrack).toHaveBeenCalledTimes(2); // One audio, one video
-      
+
       // Use private API to verify the track was stored properly
       const localSenders = (webrtcManager as any).localSenders;
       expect(localSenders.size).toBe(2);
-      
+
       // Get the video track ID
       const videoTrackId = mockLocalStream.getVideoTracks()[0].id;
-      
+
       // Remove the track
       const result = webrtcManager.removeTrack(videoTrackId);
-      
+
       // Verify track was removed
       expect(result).toBe(true);
       expect(mockPeerConnection.removeTrack).toHaveBeenCalledWith(mockSender);
-      
+
       // Verify the track is no longer in localSenders
       expect(localSenders.has(videoTrackId)).toBe(false);
       expect(localSenders.size).toBe(1); // Only audio track should remain
     });
-    
+
     test('should replace track properly', async () => {
       const mockLocalStream = createMockMediaStream('local-stream-id', 'audio1', 'video1');
-      
+
       // Get the original video track
       const originalVideoTrack = mockLocalStream.getVideoTracks()[0];
-      
+
       // Mock sender object
       const mockSender = createMockSender(originalVideoTrack);
-      
+
       // Mock addTrack to return our mock sender
       mockPeerConnection.addTrack.mockReturnValue(mockSender);
-      
+
       // Initialize
       await webrtcManager.initialize(mockLocalStream as unknown as MediaStream);
-      
+
       // Create new track to replace with
       const newVideoTrack = createMockMediaTrack('video', 'new-video', 'New Video Track');
-      
+
       // Replace the track
       const result = webrtcManager.replaceTrack(
-        originalVideoTrack.id, 
+        originalVideoTrack.id,
         newVideoTrack as unknown as MediaStreamTrack
       );
-      
+
       // Verify track was replaced
       expect(result).toBe(true);
       expect(mockSender.replaceTrack).toHaveBeenCalledWith(newVideoTrack);
-      
+
       // Use private API to verify the sender was updated
       const localSenders = (webrtcManager as any).localSenders;
       expect(localSenders.has('new-video')).toBe(true);
       expect(localSenders.has(originalVideoTrack.id)).toBe(false);
     });
-    
+
     test('should toggle tracks properly', async () => {
       const mockLocalStream = createMockMediaStream('local-stream-id', 'audio1', 'video1');
-      
+
       // Initialize
       await webrtcManager.initialize(mockLocalStream as unknown as MediaStream);
-      
+
       // Toggle video tracks
       const result = webrtcManager.toggleTrack('video');
-      
+
       // Verify track was toggled
       expect(result).toBe(false); // Should be disabled now
-      
+
       // Toggle again
       const result2 = webrtcManager.toggleTrack('video');
-      
+
       // Verify track was toggled back
       expect(result2).toBe(true); // Should be enabled again
     });
@@ -261,100 +261,102 @@ describe('WebRTCManager Renegotiation', () => {
     test('should handle renegotiation properly', async () => {
       const mockLocalStream = createMockMediaStream('local-stream-id', 'audio1', 'video1');
       const negotiationNeededCallback = jest.fn();
-      
+
       // Set up negotiation needed handler
       webrtcManager.setOnNegotiationNeeded(negotiationNeededCallback);
-      
+
       // Initialize
       await webrtcManager.initialize(mockLocalStream as unknown as MediaStream);
-      
+
       // Verify initial state
       expect((webrtcManager as any).isRenegotiating).toBe(false);
-      
+
       // Start renegotiation
       const result = await webrtcManager.handleRenegotiation();
-      
+
       // Verify renegotiation is properly set up
       expect(result).toHaveProperty('offer');
       expect(result).toHaveProperty('connectionId');
       expect(mockPeerConnection.createOffer).toHaveBeenCalled();
       expect(mockPeerConnection.setLocalDescription).toHaveBeenCalled();
-      
+
       // Complete renegotiation
       await webrtcManager.completeRenegotiation();
-      
+
       // Verify renegotiation is completed
       expect((webrtcManager as any).isRenegotiating).toBe(false);
       expect((webrtcManager as any).pendingCandidates).toEqual([]);
     });
-    
+
     test('should handle screen share tracks', async () => {
       const mockLocalStream = createMockMediaStream('local-stream-id', 'audio1', 'video1');
       const mockScreenStream = createMockMediaStream('screen-stream-id', undefined, 'screen-video');
       const mockSender = createMockSender(null);
-      
+
       // Mock addTrack to return our mock sender
       mockPeerConnection.addTrack.mockReturnValue(mockSender);
-      
+
       // Initialize
       await webrtcManager.initialize(mockLocalStream as unknown as MediaStream);
-      
+
       // Add screen share track
-      const result = await webrtcManager.addScreenShareTrack(mockScreenStream as unknown as MediaStream);
-      
+      const result = await webrtcManager.addScreenShareTrack(
+        mockScreenStream as unknown as MediaStream
+      );
+
       // Verify screen share track was added
       expect(result).toBe(true);
       expect(mockPeerConnection.addTrack).toHaveBeenCalledWith(
-        mockScreenStream.getVideoTracks()[0], 
+        mockScreenStream.getVideoTracks()[0],
         mockScreenStream
       );
-      
+
       // Verify the track is marked as a screen share
       const localSenders = (webrtcManager as any).localSenders;
       const screenTrackId = mockScreenStream.getVideoTracks()[0].id;
       expect(localSenders.get(screenTrackId).type).toBe('screen');
-      
+
       // Remove screen share track
       const removeResult = webrtcManager.removeScreenShareTrack();
-      
+
       // Verify screen share track was removed
       expect(removeResult).toBe(true);
       expect(mockPeerConnection.removeTrack).toHaveBeenCalledWith(mockSender);
       expect(localSenders.has(screenTrackId)).toBe(false);
     });
-    
+
     test('should handle ICE candidates during renegotiation', async () => {
       const mockLocalStream = createMockMediaStream('local-stream-id', 'audio1', 'video1');
       const iceCandidateCallback = jest.fn();
-      
+
       // Set up ICE candidate handler
       webrtcManager.setOnIceCandidate(iceCandidateCallback);
-      
+
       // Initialize
       await webrtcManager.initialize(mockLocalStream as unknown as MediaStream);
-      
+
       // Start renegotiation
       await webrtcManager.handleRenegotiation();
-      
+
       // Simulate ICE candidate events during renegotiation
       const mockIceCandidate1 = { candidate: 'candidate1' };
       const mockIceCandidate2 = { candidate: 'candidate2' };
-      
+
       mockPeerConnection.onicecandidate?.({ candidate: mockIceCandidate1 } as any);
       mockPeerConnection.onicecandidate?.({ candidate: mockIceCandidate2 } as any);
-      
+
       // Verify candidates were stored, not immediately sent
       expect(iceCandidateCallback).not.toHaveBeenCalled();
       expect((webrtcManager as any).pendingCandidates.length).toBe(2);
-      
+
       // Complete renegotiation
       await webrtcManager.completeRenegotiation();
-      
+
       // Verify pending candidates were sent
       expect(iceCandidateCallback).toHaveBeenCalledTimes(2);
       expect(iceCandidateCallback).toHaveBeenCalledWith(mockIceCandidate1, expect.any(String));
       expect(iceCandidateCallback).toHaveBeenCalledWith(mockIceCandidate2, expect.any(String));
-      
+
       // Verify pending candidates were cleared
       expect((webrtcManager as any).pendingCandidates.length).toBe(0);
     });

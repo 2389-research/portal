@@ -1,6 +1,5 @@
 import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Alert } from 'react-native';
 import { createLogger } from '../services/logger';
 import { useAuth } from './useAuth';
 import { useChat } from './useChat';
@@ -12,6 +11,16 @@ export type InitPhase = 'auth' | 'media' | 'webrtc' | 'signaling' | 'chat' | 'co
 
 interface UseRoomInitializationOptions {
   skipMediaAccess?: boolean;
+}
+
+interface PhaseConfig {
+  timeoutMs: number;
+  onTimeout: (
+    moveToPhase: (phase: InitPhase) => void,
+    setLoading: (loading: boolean) => void,
+    setError: (error: string | null) => void,
+    logger: ReturnType<typeof createLogger>
+  ) => void;
 }
 
 /**
@@ -34,6 +43,15 @@ export function useRoomInitialization(
   // Store timeouts for cleanup
   const timeoutsRef = useRef<NodeJS.Timeout[]>([]);
 
+  // Move to the next initialization phase
+  const moveToPhase = useCallback(
+    (phase: InitPhase) => {
+      logger.info('Moving to phase:', phase);
+      setInitPhase(phase);
+    },
+    [logger]
+  );
+
   // Auth hook
   const auth = useAuth({
     onAuthError: (error) => {
@@ -48,20 +66,8 @@ export function useRoomInitialization(
     skipMediaAccess,
     onMediaError: (error) => {
       logger.error('Media error:', error);
-
-      // For timeout, permission, or any other media errors, don't show alerts anymore
-      // but let the user handle it through the UI's "Continue Without Camera/Mic" button
-      if (error.includes('timed out')) {
-        logger.warn('Media initialization timed out, user can continue via UI button');
-      } else if (error.includes('denied') || error.includes('permission')) {
-        logger.warn('Media access was denied, user can continue via UI button');
-      } else {
-        logger.warn('Media error occurred, user can continue via UI button:', error);
-      }
-      
-      // Stay in the media phase, but enable the UI to show the skip button
-      // We don't automatically move to the signaling phase or show alerts
-      // This prevents flickering caused by alerts and allows more UI control
+      // Media errors are handled via the UI, user can continue via UI button
+      logger.warn('Media error occurred, user can continue via UI button:', error);
     },
   });
 
@@ -70,29 +76,32 @@ export function useRoomInitialization(
     skipWebRTC: skipMediaAccess,
     onWebRTCError: (error) => {
       logger.error('WebRTC error:', error);
-      
-      // No alerts, let user continue via UI button
+      // WebRTC errors are handled via the UI, user can continue via UI button
       logger.warn('WebRTC error occurred, user can continue via UI button');
-      
-      // Stay in current phase, let UI handle the skip action
-      // This prevents flickering caused by alerts
     },
     // Handle renegotiation needed events
-    onRenegotiationNeeded: async (connectionId) => {
+    onRenegotiationNeeded: async (connectionId: string) => {
       logger.info('WebRTC renegotiation needed for connection ID:', connectionId);
-      
+
       if (webrtc.handleRenegotiation && signaling.connected) {
         try {
           // Generate a new offer for renegotiation
           const result = await webrtc.handleRenegotiation();
-          
+
           if (result) {
             // Broadcast the renegotiation offer to all peers in the room
             logger.info('Sending renegotiation offer');
-            await signaling.sendMessage('webrtc-offer', result.offer, undefined, undefined, undefined, { 
-              connectionId: result.connectionId,
-              isRenegotiation: true
-            });
+            await signaling.sendMessage(
+              'webrtc-offer',
+              result.offer,
+              undefined,
+              undefined,
+              undefined,
+              {
+                connectionId: result.connectionId,
+                isRenegotiation: true,
+              }
+            );
           }
         } catch (error) {
           logger.error('Error handling WebRTC renegotiation:', error);
@@ -100,10 +109,9 @@ export function useRoomInitialization(
       }
     },
     // Handle track removals
-    onTrackRemoved: (trackId, peerId) => {
+    onTrackRemoved: (trackId: string, peerId: string) => {
       logger.info(`Remote track ${trackId} was removed from peer ${peerId}`);
-      // Update UI if needed when tracks are removed
-    }
+    },
   });
 
   // Signaling hook (depends on auth.apiClient and roomId)
@@ -127,9 +135,11 @@ export function useRoomInitialization(
               // Extract the offer and connection ID
               const { offer, connectionId } = result;
               logger.info('Created offer with connection ID:', connectionId);
-              
+
               // Send the offer with the connection ID
-              await signaling.sendMessage('webrtc-offer', offer, userId, undefined, undefined, { connectionId });
+              await signaling.sendMessage('webrtc-offer', offer, userId, undefined, undefined, {
+                connectionId,
+              });
             }
           } catch (error) {
             logger.error('Error creating offer for new user:', error);
@@ -156,14 +166,43 @@ export function useRoomInitialization(
     },
   });
 
-  // Move to the next initialization phase
-  const moveToPhase = useCallback(
-    (phase: InitPhase) => {
-      logger.info('Moving to phase:', phase);
-      setInitPhase(phase);
+  // Define phase configurations
+  const phaseConfigs: Record<Exclude<InitPhase, 'complete'>, PhaseConfig> = {
+    auth: {
+      timeoutMs: 15000,
+      onTimeout: (moveToPhase, setLoading, setError, logger) => {
+        logger.warn('Auth phase timed out, but continuing with initialization');
+        moveToPhase('media');
+      },
     },
-    [logger]
-  );
+    media: {
+      timeoutMs: 30000,
+      onTimeout: (moveToPhase, setLoading, setError, logger) => {
+        logger.warn('Media initialization timeout reached - user can continue using UI button');
+      },
+    },
+    webrtc: {
+      timeoutMs: 15000,
+      onTimeout: (moveToPhase, setLoading, setError, logger) => {
+        logger.warn('WebRTC initialization timeout reached - user can continue using UI button');
+      },
+    },
+    signaling: {
+      timeoutMs: 30000,
+      onTimeout: (moveToPhase, setLoading, setError, logger) => {
+        setError('Room initialization timed out during signaling phase. Please try again later.');
+        setLoading(false);
+      },
+    },
+    chat: {
+      timeoutMs: 15000,
+      onTimeout: (moveToPhase, setLoading, setError, logger) => {
+        logger.warn('Chat initialization timed out, but continuing without chat');
+        moveToPhase('complete');
+        setLoading(false);
+      },
+    },
+  };
 
   // Setup phase timeouts
   useEffect(() => {
@@ -171,61 +210,18 @@ export function useRoomInitialization(
 
     logger.info('Setting up phase timeouts');
 
-    // Phase-specific timeouts - increased timeouts for media to prevent overlapping permission prompts
-    const phaseTimeouts = {
-      auth: 15000, // 15 seconds for auth
-      media: 30000, // 30 seconds for media to prevent flapping
-      webrtc: 15000, // 15 seconds for WebRTC
-      signaling: 30000, // 30 seconds for signaling
-      chat: 15000, // 15 seconds for chat
-    };
-
     // Create a timeout watcher function
     const watchPhaseTimeout = (phase: Exclude<InitPhase, 'complete'>) => {
+      const { timeoutMs, onTimeout } = phaseConfigs[phase];
+
       const timeoutId = setTimeout(() => {
         if (initPhase === phase && loading) {
           logger.error(
-            `Phase '${phase}' initialization timed out after ${phaseTimeouts[phase] / 1000} seconds`
+            `Phase '${phase}' initialization timed out after ${timeoutMs / 1000} seconds`
           );
-
-          // Handle timeout based on the phase
-          switch (phase) {
-            case 'auth':
-              // For auth phase, just log error and continue to next phase
-              logger.warn('Auth phase timed out, but continuing with initialization');
-              moveToPhase('media');
-              break;
-
-            case 'media':
-              // For media phase, just log the timeout but don't show alerts
-              // The user can use the UI button to skip media
-              logger.warn('Media initialization timeout reached - user can continue using UI button');
-              break;
-
-            case 'webrtc':
-              // For WebRTC phase, just log the timeout but don't show alerts
-              // The user can use the UI button to skip WebRTC
-              logger.warn('WebRTC initialization timeout reached - user can continue using UI button');
-              break;
-
-            case 'signaling':
-              // For signaling, this is critical so we stop with an error
-              setError(
-                'Room initialization timed out during signaling phase. Please try again later.'
-              );
-              setLoading(false);
-              break;
-
-            case 'chat':
-              // For chat, we can continue without it
-              logger.warn('Chat initialization timed out, but continuing without chat');
-              moveToPhase('complete');
-              // Don't block the UI on chat initialization
-              setLoading(false);
-              break;
-          }
+          onTimeout(moveToPhase, setLoading, setError, logger);
         }
-      }, phaseTimeouts[phase]);
+      }, timeoutMs);
 
       // Store the timeout for cleanup
       timeoutsRef.current.push(timeoutId);
@@ -255,7 +251,7 @@ export function useRoomInitialization(
     };
   }, [loading, roomId, initPhase, moveToPhase, logger]);
 
-  // Setup WebRTC signaling handlers
+  // Handle WebRTC signaling messages
   useEffect(() => {
     if (!signaling.connected || !webrtc.isInitialized) {
       return;
@@ -263,108 +259,123 @@ export function useRoomInitialization(
 
     logger.info('Setting up WebRTC signaling handlers');
 
-    // Handle WebRTC offer
-    const handleOffer = async (message: any) => {
+    const handleSignalingMessage = async (type: string, message: any) => {
       try {
-        if (!webrtc.processOffer) return;
-
         // Extract the connection ID from the message
         const connectionId = message.connectionId || (message.data && message.data.connectionId);
-        
-        // Check if this is a renegotiation offer
-        const isRenegotiation = message.isRenegotiation || (message.data && message.data.isRenegotiation);
-        
-        if (isRenegotiation) {
-          logger.info('Received renegotiation offer with connection ID:', connectionId);
-        }
-        
-        if (!connectionId) {
-          logger.warn('Received offer without connection ID, generating a fallback ID');
-          // Generate a fallback ID if none was provided (for backward compatibility)
-          const fallbackId = Math.random().toString(36).substring(2, 15);
-          logger.info('Using fallback connection ID:', fallbackId);
-          
-          const answer = await webrtc.processOffer(message.data, fallbackId);
-          if (answer) {
-            // Send answer with the fallback connection ID
-            await signaling.sendMessage('webrtc-answer', answer.answer, message.sender, undefined, undefined, { 
-              connectionId: fallbackId,
-              isRenegotiation
-            });
-          }
-        } else {
-          logger.info(`Processing ${isRenegotiation ? 'renegotiation ' : ''}offer with connection ID:`, connectionId);
-          const answer = await webrtc.processOffer(message.data, connectionId);
-          
-          if (answer) {
-            // Send answer with same connection ID from the offer
-            await signaling.sendMessage('webrtc-answer', answer.answer, message.sender, undefined, undefined, { 
-              connectionId,
-              isRenegotiation
-            });
-          }
-        }
-      } catch (error) {
-        logger.error('Error processing offer:', error);
-      }
-    };
 
-    // Handle WebRTC answer
-    const handleAnswer = async (message: any) => {
-      try {
-        if (!webrtc.processAnswer) return;
-        
-        // Extract the connection ID from the message
-        const connectionId = message.connectionId || (message.data && message.data.connectionId);
-        
-        // Check if this is a response to a renegotiation offer
-        const isRenegotiation = message.isRenegotiation || (message.data && message.data.isRenegotiation);
-        
-        if (isRenegotiation) {
-          logger.info('Received answer for renegotiation with connection ID:', connectionId);
-        }
-        
-        if (!connectionId) {
-          logger.warn('Received answer without connection ID, using default connection');
-          // For backward compatibility, still process the answer
-          await webrtc.processAnswer(message.data, webrtc.webrtcManager?.getCurrentConnectionId() || 'default');
-        } else {
-          logger.info(`Processing ${isRenegotiation ? 'renegotiation ' : ''}answer with connection ID:`, connectionId);
-          await webrtc.processAnswer(message.data, connectionId);
-          
-          // If this was a renegotiation, we need to complete the process
-          if (isRenegotiation && webrtc.webrtcManager) {
-            logger.info('Completing renegotiation after receiving answer');
-            await webrtc.webrtcManager.completeRenegotiation();
-          }
-        }
-      } catch (error) {
-        logger.error('Error processing answer:', error);
-      }
-    };
+        // Check if this is a renegotiation
+        const isRenegotiation =
+          message.isRenegotiation || (message.data && message.data.isRenegotiation);
 
-    // Handle ICE candidates
-    const handleIceCandidate = async (message: any) => {
-      try {
-        if (!webrtc.addIceCandidate) return;
-        
-        // Extract the connection ID from the message
-        const connectionId = message.connectionId || (message.data && message.data.connectionId);
-        
-        if (!connectionId) {
-          logger.warn('Received ICE candidate without connection ID, using default connection');
-          // For backward compatibility, still process the candidate with the current connection ID
-          await webrtc.addIceCandidate(message.data, webrtc.webrtcManager?.getCurrentConnectionId() || 'default');
-        } else {
-          logger.info('Adding ICE candidate with connection ID:', connectionId);
-          await webrtc.addIceCandidate(message.data, connectionId);
+        switch (type) {
+          case 'webrtc-offer':
+            if (!webrtc.processOffer) return;
+
+            if (isRenegotiation) {
+              logger.info('Received renegotiation offer with connection ID:', connectionId);
+            }
+
+            if (!connectionId) {
+              logger.warn('Received offer without connection ID, generating a fallback ID');
+              // Generate a fallback ID if none was provided (for backward compatibility)
+              const fallbackId = Math.random().toString(36).substring(2, 15);
+              logger.info('Using fallback connection ID:', fallbackId);
+
+              const answer = await webrtc.processOffer(message.data, fallbackId);
+              if (answer) {
+                // Send answer with the fallback connection ID
+                await signaling.sendMessage(
+                  'webrtc-answer',
+                  answer.answer,
+                  message.sender,
+                  undefined,
+                  undefined,
+                  {
+                    connectionId: fallbackId,
+                    isRenegotiation,
+                  }
+                );
+              }
+            } else {
+              logger.info(
+                `Processing ${isRenegotiation ? 'renegotiation ' : ''}offer with connection ID:`,
+                connectionId
+              );
+              const answer = await webrtc.processOffer(message.data, connectionId);
+
+              if (answer) {
+                // Send answer with same connection ID from the offer
+                await signaling.sendMessage(
+                  'webrtc-answer',
+                  answer.answer,
+                  message.sender,
+                  undefined,
+                  undefined,
+                  {
+                    connectionId,
+                    isRenegotiation,
+                  }
+                );
+              }
+            }
+            break;
+
+          case 'webrtc-answer':
+            if (!webrtc.processAnswer) return;
+
+            if (isRenegotiation) {
+              logger.info('Received answer for renegotiation with connection ID:', connectionId);
+            }
+
+            if (!connectionId) {
+              logger.warn('Received answer without connection ID, using default connection');
+              // For backward compatibility, still process the answer
+              await webrtc.processAnswer(
+                message.data,
+                webrtc.webrtcManager?.getCurrentConnectionId() || 'default'
+              );
+            } else {
+              logger.info(
+                `Processing ${isRenegotiation ? 'renegotiation ' : ''}answer with connection ID:`,
+                connectionId
+              );
+              await webrtc.processAnswer(message.data, connectionId);
+
+              // If this was a renegotiation, we need to complete the process
+              if (isRenegotiation && webrtc.webrtcManager) {
+                logger.info('Completing renegotiation after receiving answer');
+                await webrtc.webrtcManager.completeRenegotiation();
+              }
+            }
+            break;
+
+          case 'ice-candidate':
+            if (!webrtc.addIceCandidate) return;
+
+            if (!connectionId) {
+              logger.warn('Received ICE candidate without connection ID, using default connection');
+              // For backward compatibility, still process the candidate with the current connection ID
+              await webrtc.addIceCandidate(
+                message.data,
+                webrtc.webrtcManager?.getCurrentConnectionId() || 'default'
+              );
+            } else {
+              logger.info('Adding ICE candidate with connection ID:', connectionId);
+              await webrtc.addIceCandidate(message.data, connectionId);
+            }
+            break;
         }
       } catch (error) {
-        logger.error('Error adding ICE candidate:', error);
+        logger.error(`Error handling ${type}:`, error);
       }
     };
 
     // Register handlers
+    const handleOffer = (message: any) => handleSignalingMessage('webrtc-offer', message);
+    const handleAnswer = (message: any) => handleSignalingMessage('webrtc-answer', message);
+    const handleIceCandidate = (message: any) => handleSignalingMessage('ice-candidate', message);
+
     signaling.on('webrtc-offer', handleOffer);
     signaling.on('webrtc-answer', handleAnswer);
     signaling.on('ice-candidate', handleIceCandidate);
@@ -373,7 +384,9 @@ export function useRoomInitialization(
     if (webrtc.setOnIceCandidate) {
       webrtc.setOnIceCandidate(async (candidate, connectionId) => {
         // Send ICE candidate with the connection ID
-        await signaling.sendMessage('ice-candidate', candidate, undefined, undefined, undefined, { connectionId });
+        await signaling.sendMessage('ice-candidate', candidate, undefined, undefined, undefined, {
+          connectionId,
+        });
       });
     }
 
@@ -393,61 +406,45 @@ export function useRoomInitialization(
       return;
     }
 
-    // Define the initialization sequence
+    // Run room initialization
     const initializeRoom = async () => {
       try {
-        logger.info('Starting room initialization sequence');
+        logger.info('Current initialization phase:', initPhase);
 
-        // Auth phase - already managed by useAuth hook
-        setInitPhase('auth');
-
-        // Wait for auth check to complete
-        if (!auth.authChecked) {
-          logger.info('Waiting for auth check to complete');
-          // The auth phase timeout will handle this case
-          return;
-        }
-
-        // Move to next phase once auth is checked
-        if (auth.authChecked && initPhase === 'auth') {
-          // Move to media phase
-          moveToPhase('media');
-        }
-
-        // Media phase is handled by useMedia hook
-        // WebRTC phase is handled by useWebRTC hook
-
-        // These phases are progressed by the hooks themselves or through timeouts
-
-        // Signaling phase
-        if (initPhase === 'signaling') {
-          // Join the room if not already connected
-          if (!signaling.connected) {
-            logger.info('Signaling phase: Joining room');
-            const newUserId = await signaling.joinRoom(roomId);
-            if (newUserId) {
-              logger.info('Joined room with user ID:', newUserId);
-
-              // Complete signaling phase, move to chat or complete
-              if (skipMediaAccess) {
-                logger.info('Media was skipped, completing initialization');
-                moveToPhase('complete');
-                setLoading(false);
-              } else {
-                moveToPhase('chat');
-              }
-            } else {
-              throw new Error('Failed to join room: No user ID returned');
+        switch (initPhase) {
+          case 'auth':
+            // Wait for auth check to complete
+            if (auth.authChecked) {
+              moveToPhase('media');
             }
-          }
-        }
+            break;
 
-        // Chat phase is handled by useChat hook
+          case 'signaling':
+            // Join the room if not already connected
+            if (!signaling.connected) {
+              logger.info('Signaling phase: Joining room');
+              const newUserId = await signaling.joinRoom(roomId);
+              if (newUserId) {
+                logger.info('Joined room with user ID:', newUserId);
 
-        // Complete phase
-        if (initPhase === 'complete') {
-          logger.info('Room initialization complete');
-          setLoading(false);
+                // Complete signaling phase, move to chat or complete
+                if (skipMediaAccess) {
+                  logger.info('Media was skipped, completing initialization');
+                  moveToPhase('complete');
+                  setLoading(false);
+                } else {
+                  moveToPhase('chat');
+                }
+              } else {
+                throw new Error('Failed to join room: No user ID returned');
+              }
+            }
+            break;
+
+          case 'complete':
+            logger.info('Room initialization complete');
+            setLoading(false);
+            break;
         }
       } catch (error: unknown) {
         logger.error('Error in room initialization sequence:', error);
@@ -465,11 +462,6 @@ export function useRoomInitialization(
 
     // Run initialization when phase changes
     initializeRoom();
-
-    // Cleanup function
-    return () => {
-      // Timeouts are cleaned up in their own effect
-    };
   }, [
     roomId,
     initPhase,
@@ -484,69 +476,86 @@ export function useRoomInitialization(
 
   // Auto-progress phases when subsystems are ready
   useEffect(() => {
-    // Create a local flag for this render cycle
+    // Create a function to safely schedule phase transitions
+    const schedulePhaseTransition = (nextPhase: InitPhase, shouldSetLoading = false) => {
+      // Don't schedule the same phase transition twice
+      if (nextPhase === initPhase) {
+        logger.debug(`Already in phase ${nextPhase}, not transitioning`);
+        return;
+      }
+
+      logger.info(`Scheduling transition from ${initPhase} to ${nextPhase}`);
+
+      // Use a timeout to break the render cycle
+      const timeoutId = setTimeout(() => {
+        moveToPhase(nextPhase);
+        if (shouldSetLoading === false) {
+          setLoading(false);
+        }
+      }, 0);
+
+      timeoutsRef.current.push(timeoutId);
+    };
+
+    // Use a state variable to prevent multiple transitions in a single effect cycle
     let phaseTransitionScheduled = false;
 
-    // Auto-progress from auth to media when auth is checked
-    if (initPhase === 'auth' && auth.authChecked && !phaseTransitionScheduled) {
-      // Schedule the update for the next tick to break the render cycle
-      phaseTransitionScheduled = true;
-      const timeoutId = setTimeout(() => moveToPhase('media'), 0);
-      timeoutsRef.current.push(timeoutId);
-      return;
-    }
-
-    // Auto-progress from media to webrtc when media is ready or skipped
-    if (initPhase === 'media' && !phaseTransitionScheduled) {
-      if (skipMediaAccess) {
+    // Process transitions in a specific order of priority
+    const processPhaseTransitions = () => {
+      // 1. Auth → Media transition
+      if (initPhase === 'auth' && auth.authChecked && !phaseTransitionScheduled) {
+        logger.debug('Auth checked, transitioning to media phase');
         phaseTransitionScheduled = true;
-        const timeoutId = setTimeout(() => moveToPhase('signaling'), 0);
-        timeoutsRef.current.push(timeoutId);
+        schedulePhaseTransition('media');
         return;
       }
 
-      if (media.localStream) {
+      // 2. Media → WebRTC/Signaling transition
+      if (initPhase === 'media' && !phaseTransitionScheduled) {
+        if (skipMediaAccess) {
+          logger.debug('Media access skipped, transitioning to signaling phase');
+          phaseTransitionScheduled = true;
+          schedulePhaseTransition('signaling');
+          return;
+        }
+
+        if (media.localStream) {
+          logger.debug('Local stream available, transitioning to WebRTC phase');
+          phaseTransitionScheduled = true;
+          schedulePhaseTransition('webrtc');
+          return;
+        }
+      }
+
+      // 3. WebRTC → Signaling transition (only when WebRTC is fully initialized)
+      if (initPhase === 'webrtc' && webrtc.isInitialized && !phaseTransitionScheduled) {
+        logger.debug('WebRTC initialized, transitioning to signaling phase');
         phaseTransitionScheduled = true;
-        const timeoutId = setTimeout(() => moveToPhase('webrtc'), 0);
-        timeoutsRef.current.push(timeoutId);
+        schedulePhaseTransition('signaling');
         return;
       }
-    }
 
-    // Auto-progress from webrtc to signaling when webrtc is initialized
-    if (initPhase === 'webrtc' && webrtc.isInitialized && !phaseTransitionScheduled) {
-      phaseTransitionScheduled = true;
-      const timeoutId = setTimeout(() => moveToPhase('signaling'), 0);
-      timeoutsRef.current.push(timeoutId);
-      return;
-    }
+      // 4. Chat → Complete transition
+      if (initPhase === 'chat' && !phaseTransitionScheduled) {
+        if (chat.chatReady) {
+          logger.debug('Chat ready, completing initialization');
+          phaseTransitionScheduled = true;
+          schedulePhaseTransition('complete', false);
+          return;
+        }
 
-    // Auto-progress from chat to complete when chat is ready
-    if (initPhase === 'chat' && chat.chatReady && !phaseTransitionScheduled) {
-      phaseTransitionScheduled = true;
-      const timeoutId = setTimeout(() => {
-        moveToPhase('complete');
-        setLoading(false);
-      }, 0);
-      timeoutsRef.current.push(timeoutId);
-      return;
-    }
+        // Handle chat errors but only if we're connected to the room
+        if (chat.chatError && signaling.connected) {
+          logger.warn('Chat failed, but proceeding with room initialization');
+          phaseTransitionScheduled = true;
+          schedulePhaseTransition('complete', false);
+          return;
+        }
+      }
+    };
 
-    // Auto-complete if chat fails but we've already connected to the room
-    if (
-      initPhase === 'chat' &&
-      chat.chatError &&
-      signaling.connected &&
-      !phaseTransitionScheduled
-    ) {
-      phaseTransitionScheduled = true;
-      logger.warn('Chat failed, but proceeding with room initialization');
-      const timeoutId = setTimeout(() => {
-        moveToPhase('complete');
-        setLoading(false);
-      }, 0);
-      timeoutsRef.current.push(timeoutId);
-    }
+    // Process transitions once per render cycle
+    processPhaseTransitions();
   }, [
     auth.authChecked,
     media.localStream,
