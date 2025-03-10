@@ -21,6 +21,8 @@ export class ChatManager {
   private onMessageCallback: ((message: ChatMessage) => void) | null = null;
   private dataChannelManager: DataChannelManager;
   private logger = createLogger('Chat');
+  private initialized = false;
+  private isInitializing = false;
 
   constructor(userId: string, webrtcManager: WebRTCManager) {
     this.userId = userId;
@@ -36,8 +38,46 @@ export class ChatManager {
    * Initialize chat with a data channel
    */
   public async initialize(isInitiator: boolean): Promise<boolean> {
+    // Don't try to initialize if we're already initializing or initialized
+    if (this.isInitializing) {
+      this.logger.info('Chat initialization already in progress');
+      // Wait for existing initialization to complete
+      return new Promise((resolve) => {
+        const checkInterval = setInterval(() => {
+          if (!this.isInitializing) {
+            clearInterval(checkInterval);
+            resolve(this.initialized);
+          }
+        }, 500);
+
+        // Set a max wait time of 10 seconds
+        setTimeout(() => {
+          clearInterval(checkInterval);
+          resolve(this.initialized);
+        }, 10000);
+      });
+    }
+
+    if (this.initialized && this.isReady()) {
+      this.logger.info('Chat already initialized and ready');
+      return true;
+    }
+
+    this.isInitializing = true;
     this.logger.info('Initializing chat, isInitiator:', isInitiator);
-    return await this.dataChannelManager.initialize(isInitiator);
+
+    try {
+      // Initialize the data channel
+      const result = await this.dataChannelManager.initialize(isInitiator);
+      this.initialized = result;
+      this.isInitializing = false;
+
+      return result;
+    } catch (error) {
+      this.logger.error('Error initializing chat:', error);
+      this.isInitializing = false;
+      return false;
+    }
   }
 
   /**
@@ -66,8 +106,8 @@ export class ChatManager {
    */
   public sendMessage(content: string): ChatMessage | null {
     // Check if data channel is ready
-    if (!this.dataChannelManager.isReady()) {
-      this.logger.error('Data channel not ready to send message');
+    if (!this.isReady()) {
+      this.logger.error('Chat not ready to send message');
       return null;
     }
 
@@ -159,6 +199,8 @@ export class ChatManager {
    */
   public close(): void {
     this.dataChannelManager.close();
+    this.initialized = false;
+    this.isInitializing = false;
   }
 
   /**

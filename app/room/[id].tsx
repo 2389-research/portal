@@ -79,7 +79,16 @@ export default function RoomScreen() {
             size="small"
             appearance="ghost"
             accessoryLeft={renderChatIcon}
-            onPress={() => setIsChatVisible(!isChatVisible)}
+            onPress={() => {
+              // If toggling to visible and we have a chat initializer, use it
+              if (!isChatVisible && room.chat.initializeChat) {
+                // Initialize chat when showing the panel
+                room.chat.initializeChat().then((ready) => {
+                  logger.info('Chat initialization result when toggling visibility:', ready);
+                });
+              }
+              setIsChatVisible(!isChatVisible);
+            }}
             status={isChatVisible ? 'primary' : 'basic'}
           />
           <Button

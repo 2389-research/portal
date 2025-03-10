@@ -19,6 +19,9 @@ export class DataChannelManager {
   private onMessageCallback: ((message: DataChannelMessage) => void) | null = null;
   private onReadyStateChangeCallbacks: ((isReady: boolean) => void)[] = [];
   private logger = createLogger('DataChannel');
+  private isInitializing = false;
+  private channelName = 'chat';
+  private initialized = false;
 
   constructor(webrtcManager: WebRTCManager) {
     this.webrtcManager = webrtcManager;
@@ -28,61 +31,86 @@ export class DataChannelManager {
    * Initialize data channel
    */
   public async initialize(isInitiator: boolean): Promise<boolean> {
+    // If already initialized or initializing, don't try again
+    if (this.initialized || this.isInitializing) {
+      this.logger.info('Data channel already initialized or initializing');
+      return this.isReady();
+    }
+
+    this.isInitializing = true;
     this.logger.info('Initializing data channel, isInitiator:', isInitiator);
 
-    if (isInitiator) {
-      try {
+    try {
+      if (isInitiator) {
         // Create data channel as the initiator
         this.logger.info('Creating data channel as initiator');
 
         // Make sure webrtcManager is properly initialized
         if (!this.webrtcManager) {
           this.logger.error('WebRTC manager is not available');
+          this.isInitializing = false;
           return false;
         }
 
-        this.dataChannel = this.webrtcManager.createDataChannel('chat');
+        // Create the data channel and set up event handlers
+        this.dataChannel = this.webrtcManager.createDataChannel(this.channelName);
 
         if (!this.dataChannel) {
           this.logger.error('Failed to create data channel');
+          this.isInitializing = false;
           return false;
         }
 
         this.setupDataChannel();
 
-        // Wait for the channel to be ready
-        const ready = await this.waitForChannelReady(15000);
+        // Wait for the channel to be open or timeout
+        const ready = await this.waitForChannelReady(10000);
         this.logger.info('Data channel ready state after initialization:', ready);
+        this.initialized = ready;
+        this.isInitializing = false;
         return ready;
-      } catch (error) {
-        this.logger.error('Error creating data channel:', error);
-        return false;
-      }
-    }
-    // Create a promise that will resolve when the data channel is ready
-    return new Promise((resolve) => {
-      // Set up callback to receive the data channel
-      this.webrtcManager.setOnDataChannel((channel) => {
-        this.logger.info('Received data channel in callback');
-        this.dataChannel = channel;
-        this.setupDataChannel();
+      } else {
+        // Register for data channel callback as non-initiator
+        return new Promise((resolve) => {
+          // Set up callback to receive the data channel
+          this.webrtcManager.setOnDataChannel((channel) => {
+            this.logger.info('Received data channel in callback:', channel.label);
+            if (channel.label === this.channelName) {
+              this.dataChannel = channel;
+              this.setupDataChannel();
 
-        // Wait for the channel to be ready after receiving it
-        this.waitForChannelReady(15000).then((ready) => {
-          this.logger.info('Non-initiator data channel ready state:', ready);
-          resolve(ready);
+              // Wait for the channel to be ready after receiving it
+              this.waitForChannelReady(10000).then((ready) => {
+                this.logger.info('Non-initiator data channel ready state:', ready);
+                this.initialized = ready;
+                this.isInitializing = false;
+                resolve(ready);
+              });
+            }
+          });
+
+          // Set a timeout in case we never receive a data channel
+          const timeoutId = setTimeout(() => {
+            if (!this.dataChannel) {
+              this.logger.error('Timed out waiting to receive data channel');
+              // No need to unregister, not returning a function
+              this.isInitializing = false;
+              resolve(false);
+            }
+          }, 15000);
+
+          // Store the timeout ID for possible cleanup
+          this.timeoutId = timeoutId;
         });
-      });
-
-      // Set a timeout in case we never receive a data channel
-      setTimeout(() => {
-        if (!this.dataChannel) {
-          this.logger.error('Timed out waiting to receive data channel');
-          resolve(false);
-        }
-      }, 20000);
-    });
+      }
+    } catch (error) {
+      this.logger.error('Error initializing data channel:', error);
+      this.isInitializing = false;
+      return false;
+    }
   }
+
+  private timeoutId: any = null;
 
   /**
    * Set up data channel event handlers
@@ -99,15 +127,24 @@ export class DataChannelManager {
       try {
         this.logger.info(
           'Received message:',
-          event.data.substring(0, 50) + (event.data.length > 50 ? '...' : '')
+          typeof event.data === 'string'
+            ? event.data.substring(0, 50) + (event.data.length > 50 ? '...' : '')
+            : 'Non-text message'
         );
-        const data = JSON.parse(event.data);
+
+        let data: DataChannelMessage;
+        try {
+          data = JSON.parse(event.data);
+        } catch (error) {
+          this.logger.error('Error parsing data channel message:', error);
+          return;
+        }
 
         if (this.onMessageCallback) {
           this.onMessageCallback(data);
         }
       } catch (error) {
-        this.logger.error('Error parsing data channel message:', error);
+        this.logger.error('Error handling data channel message:', error);
       }
     };
 
@@ -214,20 +251,10 @@ export class DataChannelManager {
    */
   public isReady(): boolean {
     if (!this.dataChannel) {
-      this.logger.info('Data channel is null, not ready');
       return false;
     }
 
-    const isChannelOpen = this.dataChannel.readyState === 'open';
-
-    if (!isChannelOpen) {
-      this.logger.info(
-        'Data channel is not in open state, current state:',
-        this.dataChannel.readyState
-      );
-    }
-
-    return isChannelOpen;
+    return this.dataChannel.readyState === 'open';
   }
 
   /**
@@ -246,6 +273,7 @@ export class DataChannelManager {
       // Set a timeout to avoid waiting indefinitely
       const timeout = setTimeout(() => {
         this.logger.info('Timed out waiting for data channel to open');
+        cleanup();
         resolve(false);
       }, timeoutMs);
 
@@ -260,9 +288,16 @@ export class DataChannelManager {
       // Create a one-time event handler for the open event
       const openHandler = () => {
         this.logger.info('Data channel opened while waiting');
-        clearTimeout(timeout);
-        this.dataChannel?.removeEventListener('open', openHandler);
+        cleanup();
         resolve(true);
+      };
+
+      // Function to clean up event listeners and timeouts
+      const cleanup = () => {
+        clearTimeout(timeout);
+        if (this.dataChannel) {
+          this.dataChannel.removeEventListener('open', openHandler);
+        }
       };
 
       // Add the event listener
@@ -274,6 +309,12 @@ export class DataChannelManager {
    * Close the data channel
    */
   public close(): void {
+    // Clear any pending timeouts
+    if (this.timeoutId) {
+      clearTimeout(this.timeoutId);
+      this.timeoutId = null;
+    }
+
     if (this.dataChannel) {
       this.dataChannel.close();
       this.dataChannel = null;
@@ -283,5 +324,8 @@ export class DataChannelManager {
 
     // Clear all callbacks as part of cleanup
     this.onMessageCallback = null;
+    this.onReadyStateChangeCallbacks = [];
+    this.initialized = false;
+    this.isInitializing = false;
   }
 }

@@ -161,8 +161,10 @@ export function useRoomInitialization(
   const chat = useChat(signaling.userId, webrtc.isInitialized ? webrtc.webrtcManager : null, {
     onChatError: (error) => {
       logger.warn('Chat error, but continuing:', error);
-      // Non-fatal, just move to completion
-      moveToPhase('complete');
+      // Non-fatal, just move to completion if we're in the chat phase
+      if (initPhase === 'chat') {
+        moveToPhase('complete');
+      }
     },
   });
 
